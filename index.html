@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#f4f5f7">
+<title>Mi Voz · Comunicador</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#eef0f3; --bar:#ffffff; --ink:#1f2937; --muted:#6b7280; --line:#d8dce2;
+  --accent:#2563eb; --radius:14px; --gap:8px;
+  /* Código de color SAAC (Fitzgerald adaptado, usado por ARASAAC) */
+  --per-bg:#fff6cc; --per-bd:#e9b500;
+  --ver-bg:#e4f6e1; --ver-bd:#34a04a;
+  --des-bg:#e2eeff; --des-bd:#3b7ddd;
+  --cos-bg:#ffe9d6; --cos-bd:#ec8a2e;
+  --soc-bg:#fde6f2; --soc-bd:#d9508f;
+  --fol-bg:#ffffff; --fol-bd:#64748b;
+  --otr-bg:#ffffff; --otr-bd:#9aa3ae;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  overscroll-behavior:none;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+
+/* ---------- Barra de frase ---------- */
+#bar{flex:0 0 auto;display:flex;align-items:stretch;gap:10px;padding:10px 12px;background:var(--bar);
+  border-bottom:1px solid var(--line);height:clamp(84px,14vh,120px)}
+#sentence{flex:1;display:flex;align-items:center;gap:8px;overflow-x:auto;overflow-y:hidden;
+  padding:4px 8px;border-radius:12px;background:#f7f8fa;border:1px solid var(--line);scrollbar-width:none}
+#sentence::-webkit-scrollbar{display:none}
+#sentence .ph{color:var(--muted);font-size:15px;padding-left:4px}
+.chip{flex:0 0 auto;height:100%;aspect-ratio:1/1.05;display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+  background:#fff;border:2px solid var(--otr-bd);border-radius:10px;padding:3px}
+.chip .im{flex:1;width:100%;min-height:0;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.chip .im img{width:100%;height:100%;object-fit:contain}
+.chip .im img.photo{object-fit:cover;object-position:center 30%}
+.chip .tx{font-weight:800;font-size:12px;line-height:1.1;text-align:center;padding-top:2px;white-space:nowrap}
+.bbtn{flex:0 0 auto;min-width:74px;border:1px solid var(--line);background:#fff;border-radius:12px;font-size:28px;
+  display:flex;align-items:center;justify-content:center;color:#374151;cursor:pointer}
+.bbtn:active{background:#eef2f7}
+.bbtn.speak{background:var(--accent);color:#fff;border-color:var(--accent);min-width:130px;font-size:20px;font-weight:800;gap:8px}
+.bbtn.home{min-width:110px;font-size:17px;font-weight:800;gap:6px;background:#f1f5f9}
+.bbtn svg{width:30px;height:30px}
+
+/* ---------- Tablero ---------- */
+#fbar{flex:0 0 auto;display:none;align-items:center;gap:8px;padding:6px 12px 0;flex-wrap:nowrap;overflow:hidden}
+#fbar.on{display:flex}
+.fb{border:2px solid var(--line);background:#fff;border-radius:10px;height:42px;padding:0 14px;font-size:16px;font-weight:800;color:var(--ink);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.fb:active{background:#eef2f7}
+.fb.on{background:#dbeafe;border-color:var(--accent);color:#1e40af}
+.fchip{height:34px;padding:0 12px;border-radius:999px;background:#e2e8f0;font-size:15px;font-weight:700;display:flex;align-items:center;gap:6px;border:0;white-space:nowrap}
+.fhint{font-size:15px;font-weight:700;color:var(--muted);white-space:nowrap}
+#boardWrap{flex:1;min-height:0;padding:var(--gap);position:relative}
+#board{display:grid;gap:var(--gap);height:100%;width:100%}
+.cell{position:relative;display:flex;flex-direction:column;border-radius:var(--radius);border:3px solid var(--otr-bd);
+  background:var(--otr-bg);padding:3px 4px 4px;min-height:0;min-width:0;overflow:hidden;cursor:pointer;
+  transition:transform .08s ease}
+.cell:active,.cell.pressed{transform:scale(.97)}
+.cell .lb{flex:0 0 auto;font-weight:800;text-align:center;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-size:var(--lbsize,15px);padding:1px 2px 3px;letter-spacing:.2px}
+.cell.below .lb{order:2;padding:4px 2px 0}
+.cell .im{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;border-radius:10px;overflow:hidden;background:#fff}
+.cell .im img{width:100%;height:100%;object-fit:contain;display:block}
+/* Fotos: la foto COMPLETA y cuadrada bajo el texto — se ve igual que al encuadrarla */
+.cell.photo-cell{padding:3px 4px 4px}
+.cell.photo-cell .im{background:transparent;border-radius:0}
+.cell.photo-cell .im img.photo{height:100%;width:auto;max-width:100%;aspect-ratio:1/1;object-fit:cover;object-position:center;
+  border-radius:8px;box-shadow:0 0 0 2px #fff,0 1px 4px rgba(0,0,0,.2)}
+/* Fotos: todas iguales — mismo marco, misma proporción, mismo recorte */
+.cell .im.hasphoto{background:transparent}
+.cell .im img.photo{object-fit:cover}
+.cell .im .noimg{font-size:clamp(18px,3vw,34px);font-weight:800;color:#9aa3ae}
+.cell.per{background:var(--per-bg);border-color:var(--per-bd)}
+.cell.ver{background:var(--ver-bg);border-color:var(--ver-bd)}
+.cell.des{background:var(--des-bg);border-color:var(--des-bd)}
+.cell.cos{background:var(--cos-bg);border-color:var(--cos-bd)}
+.cell.soc{background:var(--soc-bg);border-color:var(--soc-bd)}
+.cell.fol{background:var(--fol-bg);border-color:var(--fol-bd);border-top-width:10px}
+.cell.emp{background:transparent;border:2px dashed transparent;cursor:default}
+.cell.hid{visibility:hidden}
+body.editing .cell.emp{border-color:#b8bec8;cursor:pointer}
+body.editing .cell.hid{visibility:visible;opacity:.35}
+body.editing .cell{animation:none}
+body.editing .cell.sel{outline:4px solid var(--accent);outline-offset:2px}
+body.upper .cell .lb, body.upper .chip .tx{text-transform:uppercase}
+.edit-tag{position:absolute;top:4px;right:4px;background:rgba(31,41,55,.75);color:#fff;border-radius:6px;font-size:10px;padding:1px 5px;font-weight:700}
+
+/* ---------- Barra inferior ---------- */
+#foot{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:4px 10px;background:#fff;border-top:1px solid var(--line);height:44px}
+.fbtn{border:none;background:transparent;color:#9aa3ae;padding:6px 10px;border-radius:8px;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600}
+.fbtn svg{width:22px;height:22px}
+.fbtn.holding{color:var(--accent)}
+#editbar{display:none;gap:8px;align-items:center}
+body.editing #editbar{display:flex}
+body.editing #foot{background:#fffbea}
+.ebtn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px 12px;font-size:14px;font-weight:700;color:#374151}
+.ebtn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.ebtn.done{background:#16a34a;border-color:#16a34a;color:#fff}
+#status{font-size:13px;color:var(--muted)}
+#brand{font-size:12.5px;color:#9aa3ae;letter-spacing:.2px;white-space:nowrap}
+#brand b{color:#2563eb;font-weight:800}
+body.editing #brand{display:none}
+.about{display:flex;gap:18px;align-items:center;background:linear-gradient(135deg,#eff5ff,#fff7e0);border-radius:16px;padding:18px;margin-bottom:6px}
+.about img{width:84px;height:84px;border-radius:20px;flex:0 0 auto}
+.about h1{margin:0;font-size:28px;color:#1d4ed8}
+.about .by{font-size:16px;font-weight:700;color:#374151;margin-top:2px}
+.about .meta{font-size:13px;color:#6b7280;margin-top:6px}
+.lic{font-size:13px;color:#4b5563;line-height:1.55;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px}
+
+/* ---------- Modales ---------- */
+.modal{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modal.open{display:flex}
+.sheet{background:#fff;border-radius:18px;max-width:760px;width:100%;max-height:92vh;overflow:auto;padding:20px 22px;box-shadow:0 20px 50px rgba(0,0,0,.25);user-select:text;-webkit-user-select:text}
+.sheet h2{margin:0 0 14px;font-size:21px}
+.sheet h3{margin:20px 0 8px;font-size:15px;color:#374151;text-transform:uppercase;letter-spacing:.5px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.row label{font-weight:600;font-size:15px}
+.sheet input[type=text],.sheet input[type=password],.sheet select{font-size:17px;padding:9px 11px;border:1px solid #cbd2da;border-radius:10px;min-width:0}
+.sheet input[type=text]{flex:1}
+.btn{border:1px solid #cbd2da;background:#fff;border-radius:10px;padding:10px 16px;font-size:15px;font-weight:700;color:#1f2937;cursor:pointer}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.dan{color:#b91c1c;border-color:#f0b4b4}
+.btn:disabled{opacity:.45}
+.actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;flex-wrap:wrap}
+.hint{color:var(--muted);font-size:13px;line-height:1.4}
+.kinds{display:flex;gap:6px;flex-wrap:wrap}
+.kind{border:3px solid;border-radius:10px;padding:7px 10px;font-weight:700;font-size:14px;cursor:pointer;background:#fff}
+.kind.on{box-shadow:0 0 0 3px #1f2937}
+.kind.per{background:var(--per-bg);border-color:var(--per-bd)}
+.kind.ver{background:var(--ver-bg);border-color:var(--ver-bd)}
+.kind.des{background:var(--des-bg);border-color:var(--des-bd)}
+.kind.cos{background:var(--cos-bg);border-color:var(--cos-bd)}
+.kind.soc{background:var(--soc-bg);border-color:var(--soc-bd)}
+.kind.fol{background:#fff;border-color:var(--fol-bd)}
+.kind.otr{background:#fff;border-color:var(--otr-bd)}
+.kind.emp{background:#fff;border-color:#cbd2da;border-style:dashed}
+.prev{width:150px;height:150px;border-radius:12px;border:3px solid var(--line);overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.prev img{width:100%;height:100%;object-fit:contain}
+.prev img.photo{object-fit:cover;object-position:center 30%}
+.results{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-top:12px}
+.results button{border:2px solid var(--line);background:#fff;border-radius:12px;padding:6px;aspect-ratio:1;cursor:pointer}
+.results img{width:100%;height:100%;object-fit:contain}
+#cropBox{width:min(80vw,380px);aspect-ratio:1;margin:0 auto;border-radius:14px;box-shadow:0 0 0 3px #94a3b8;overflow:hidden;background:#111;touch-action:none;position:relative}
+#cropBox canvas{width:100%;height:100%;display:block}
+.legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.legend span{border:3px solid;border-radius:10px;padding:6px 10px;font-size:13px;font-weight:700}
+.pinpad{display:grid;grid-template-columns:repeat(3,80px);gap:10px;justify-content:center;margin-top:12px}
+.pinpad button{height:64px;font-size:26px;font-weight:700;border-radius:14px;border:1px solid #cbd2da;background:#fff}
+.pindots{display:flex;gap:12px;justify-content:center;margin:8px 0}
+.pindots i{width:16px;height:16px;border-radius:50%;border:2px solid #475569;display:block}
+.pindots i.f{background:#475569}
+.conjprev{font-size:14px;color:#374151;background:#f1f5f9;border-radius:10px;padding:8px 12px;line-height:1.6}
+progress{width:100%;height:12px}
+.credit{font-size:12px;color:var(--muted);line-height:1.4;margin-top:14px}
+@media (max-width:700px){ .bbtn{min-width:56px} .bbtn.speak{min-width:90px;font-size:16px} .bbtn.home{min-width:80px;font-size:14px} }
+
+/* ---- Figuras y colores dibujados (sin internet) ---- */
+.art{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+.art svg{width:100%;height:100%}
+/* ---- Botón y modo bloqueo ---- */
+#btnLock{color:#475569;font-weight:700}
+body.editing #btnLock{display:none}
+#lockPill{display:none;position:relative;width:min(320px,70vw);height:44px;border-radius:22px;background:#e2e8f0;border:1px solid #cbd5e1;align-items:center;overflow:hidden;touch-action:none}
+body.locked #lockPill{display:flex}
+#lockFill{position:absolute;left:0;top:0;bottom:0;width:0;background:#bbf7d0}
+#lockTxt{position:relative;margin-left:52px;font-size:13px;font-weight:700;color:#475569;white-space:nowrap;pointer-events:none}
+#lockKnob{position:absolute;left:2px;top:2px;width:38px;height:38px;border-radius:50%;background:#475569;color:#fff;display:flex;align-items:center;justify-content:center;touch-action:none;transition:background .15s}
+#lockKnob svg{width:20px;height:20px;pointer-events:none}
+#lockKnob.holding{background:#d97706}
+#lockKnob.armed{background:#16a34a}
+#lockKnob.snap{transition:transform .2s,background .15s}
+body.locked #foot{height:64px;align-items:flex-start;justify-content:center;padding-top:8px}
+body.locked #foot > :not(#lockPill){display:none!important}
+body.locked,body.locked *{touch-action:none}
+body.locked #sentence{touch-action:pan-x}
+</style>
+</head>
+<body class="upper">
+<div id="app">
+  <div id="bar">
+    <button class="bbtn home" id="btnHome" style="display:none" aria-label="Volver al inicio">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Inicio</button>
+    <div id="sentence" aria-live="polite"></div>
+    <button class="bbtn" id="btnBack" aria-label="Borrar último">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 5H9l-7 7 7 7h12z"/><path d="M17 9l-6 6M11 9l6 6"/></svg></button>
+    <button class="bbtn" id="btnClear" aria-label="Borrar todo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <button class="bbtn speak" id="btnSpeak">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 010 7M19 5a10 10 0 010 14"/></svg>Hablar</button>
+  </div>
+  <div id="fbar"></div>
+  <div id="boardWrap"><div id="board"></div></div>
+  <div id="foot">
+    <button class="fbtn" id="btnGear" aria-label="Mantén pulsado para editar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      <span id="gearHint"></span></button>
+    <div id="editbar">
+      <button class="ebtn" id="eMove">↔ Mover</button>
+      <button class="ebtn" id="eRowAdd">+ Fila</button>
+      <button class="ebtn" id="eRowDel">− Fila</button>
+      <button class="ebtn" id="eColAdd">+ Columna</button>
+      <button class="ebtn" id="eColDel">− Columna</button>
+      <button class="ebtn" id="eSettings">Ajustes</button>
+      <button class="ebtn done" id="eDone">✓ Terminar</button>
+    </div>
+    <span id="status"></span>
+    <span id="brand"><b>Mi Voz</b> · by Lucas Longueira · <span class="ver"></span></span>
+    <div id="lockPill" role="group" aria-label="Desbloquear: mantén pulsado el candado 1 segundo y arrástralo a la derecha">
+      <div id="lockFill"></div>
+      <div id="lockKnob"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg></div>
+      <span id="lockTxt">Mantén 1 s y arrastra →</span>
+    </div>
+    <button class="fbtn" id="btnLock" aria-label="Bloquear la pantalla">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg><span>Bloquear</span></button>
+    <button class="fbtn" id="btnFull" aria-label="Pantalla completa">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3M16 21h3a2 2 0 002-2v-3"/></svg></button>
+  </div>
+</div>
+
+<!-- Editor de botón -->
+<div class="modal" id="mEdit"><div class="sheet">
+  <h2 id="eTitle">Editar botón</h2>
+  <div class="row"><div class="kinds" id="eKinds"></div></div>
+  <div id="eBody">
+    <div class="row"><label for="eLabel">Texto</label><input type="text" id="eLabel" autocomplete="off"></div>
+    <div class="row" id="eVerbHint"><span class="hint">Escribe el verbo en infinitivo (querer, jugar, lavarse…). Se conjugará solo.</span></div>
+    <div class="row" id="ePersonRow"><label>Persona</label>
+      <select id="ePerson"><option value="1s">Yo</option><option value="2s">Tú</option><option value="3s">Él / ella (mamá, papá…)</option><option value="1p">Nosotros</option><option value="3p">Ellos</option></select>
+      <select id="eGender"><option value="m">Masculino</option><option value="f">Femenino</option></select>
+    </div>
+    <div class="row" id="eGenderAdjRow"><label><input type="checkbox" id="eGAdj"> Cambia con el género (contento → contenta)</label></div>
+    <div class="conjprev" id="eConj"></div>
+    <div class="row" style="align-items:flex-start;margin-top:14px">
+      <div class="prev" id="ePrev"></div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn" id="eSearch">🔎 Buscar pictograma</button>
+        <button class="btn" id="ePhoto">📷 Usar una foto</button>
+        <button class="btn" id="eRecrop" style="display:none">✂️ Reencuadrar foto</button>
+        <button class="btn dan" id="eNoPhoto" style="display:none">Quitar foto (volver al pictograma)</button>
+      </div>
+    </div>
+    <div class="row"><label><input type="checkbox" id="eHidden"> Ocultar por ahora (conserva su sitio)</label></div>
+  </div>
+  <div class="actions">
+    <button class="btn dan" id="eClearCell">Vaciar hueco</button>
+    <span style="flex:1"></span>
+    <button class="btn" id="eCancel">Cancelar</button>
+    <button class="btn pri" id="eSave">Guardar</button>
+  </div>
+</div></div>
+
+<!-- Buscador ARASAAC -->
+<div class="modal" id="mSearch"><div class="sheet">
+  <h2>Buscar pictograma ARASAAC</h2>
+  <div class="row"><input type="text" id="sQ" placeholder="Ej.: jugar, galleta, parque…"><button class="btn pri" id="sGo">Buscar</button></div>
+  <div class="hint" id="sMsg"></div>
+  <div class="results" id="sRes"></div>
+  <div class="actions"><button class="btn" id="sClose">Cerrar</button></div>
+</div></div>
+
+<!-- Recorte de foto -->
+<div class="modal" id="mCrop"><div class="sheet" style="max-width:480px">
+  <h2>Encuadrar la foto</h2>
+  <p class="hint">Arrastra para mover. Barra: al centro tamaño normal, a la derecha acercar, a la izquierda alejar. Todas las fotos se guardan con el mismo tamaño y formato.</p>
+  <div id="cropBox"><canvas id="cropCv" width="600" height="600"></canvas></div>
+  <div class="row"><label>Zoom</label><span style="font-size:22px">−</span><input type="range" id="cropZoom" min="-1" max="1" step="0.01" value="0" style="flex:1"><span style="font-size:22px">+</span></div>
+  <div class="actions"><button class="btn" id="cropCancel">Cancelar</button><button class="btn pri" id="cropOk">Usar foto</button></div>
+</div></div>
+
+<!-- PIN -->
+<div class="modal" id="mPin"><div class="sheet" style="max-width:340px;text-align:center">
+  <h2 id="pinTitle">PIN de edición</h2>
+  <div class="pindots" id="pinDots"></div>
+  <div class="hint" id="pinMsg">&nbsp;</div>
+  <div class="pinpad" id="pinPad"></div>
+  <div class="actions" style="justify-content:center"><button class="btn" id="pinCancel">Cancelar</button></div>
+</div></div>
+
+<!-- Ajustes -->
+<div class="modal" id="mSet"><div class="sheet">
+  <div class="about">
+    <img src="icon-192.png" alt="">
+    <div>
+      <h1>Mi Voz</h1>
+      <div class="by">by Lucas Longueira</div>
+      <div class="meta"><span class="ver"></span> · <span id="verDate"></span></div>
+      <div class="meta">Comunicador SAAC gratuito para familias. Hecho con amor, para que cada niño tenga su voz.</div>
+    </div>
+  </div>
+  <h2>Ajustes</h2>
+  <h3>Voz</h3>
+  <div class="row"><label>Voz</label><select id="stVoice" style="flex:1"></select><button class="btn" id="stTest">Probar</button></div>
+  <div class="row"><label>Velocidad</label><input type="range" id="stRate" min="0.5" max="1.3" step="0.05" style="flex:1"><span id="stRateV"></span></div>
+  <div class="row"><label><input type="checkbox" id="stSpeakTap"> Decir cada palabra al pulsarla</label></div>
+
+  <h3>Lenguaje</h3>
+  <div class="row"><label><input type="checkbox" id="stConjBtn"> Mostrar los verbos ya conjugados en los botones</label></div>
+  <div class="row"><label><input type="checkbox" id="stImplicit"> Sin sujeto, hablar en primera persona (QUERER → quiero)</label></div>
+  <div class="row"><label><input type="checkbox" id="stImper"> Peticiones directas al empezar (DAR → dame, AYUDAR → ayúdame)</label></div>
+  <div class="row"><label><input type="checkbox" id="stDropPron"> No decir “yo” / “tú” en voz alta (“quiero agua”)</label></div>
+  <div class="row"><label>El niño / la niña es</label><select id="stGender"><option value="m">Niño (contento)</option><option value="f">Niña (contenta)</option></select></div>
+
+  <h3>Aspecto</h3>
+  <div class="row"><label>Columnas</label><select id="stCols"></select>
+    <label>Texto</label><select id="stTextPos"><option value="above">Arriba</option><option value="below">Abajo</option></select>
+    <label>Tamaño texto</label><select id="stLb"><option value="12">Pequeño</option><option value="15">Normal</option><option value="19">Grande</option></select></div>
+  <div class="row"><label><input type="checkbox" id="stUpper"> Texto en MAYÚSCULAS</label></div>
+  <div class="row"><label><input type="checkbox" id="stReturn"> Volver al inicio al elegir dentro de una carpeta</label></div>
+  <div class="row"><label><input type="checkbox" id="stDebounce"> Ignorar toques repetidos muy seguidos</label></div>
+
+  <h3>Bloqueo e inactividad</h3>
+  <div class="row"><label><input type="checkbox" id="stIdle"> Borrar la frase y volver al inicio tras</label>
+    <select id="stIdleSecs"><option>15</option><option>30</option><option>45</option><option>60</option><option>120</option></select><label>segundos sin tocar</label></div>
+  <div class="row"><label><input type="checkbox" id="stPalm"> En modo bloqueo, ignorar manos/palmas y toques de varios dedos a la vez</label></div>
+  <p class="hint"><b>Para que tampoco pueda salir con los gestos de Android</b> (inicio, recientes, notificaciones), activa además <b>Fijar pantalla</b>: Ajustes del sistema → Seguridad → Fijar aplicación (en Samsung: Biometría y seguridad → Otros ajustes de seguridad → Fijar ventana) y activa «Pedir PIN para desfijar». Después abre Mi Voz, entra en Recientes, toca el icono de la app y elige «Fijar». Para soltarla se mantienen pulsados Atrás y Recientes (o se desliza hacia arriba y se mantiene) e introduces el PIN del tablet.</p>
+  <div class="legend">
+    <span style="background:var(--per-bg);border-color:var(--per-bd)">Personas</span>
+    <span style="background:var(--ver-bg);border-color:var(--ver-bd)">Verbos (acciones)</span>
+    <span style="background:var(--des-bg);border-color:var(--des-bd)">Descriptivos / emociones</span>
+    <span style="background:var(--cos-bg);border-color:var(--cos-bd)">Cosas, lugares</span>
+    <span style="background:var(--soc-bg);border-color:var(--soc-bd)">Social (sí, no, hola…)</span>
+    <span style="background:#fff;border-color:var(--fol-bd)">Carpetas</span>
+  </div>
+
+  <h3>Sin internet</h3>
+  <p class="hint">Descarga todos los pictogramas del tablero en esta tablet. Después funciona sin conexión.</p>
+  <div class="row"><button class="btn" id="stCache">⬇ Descargar pictogramas</button><span id="stCacheMsg" class="hint"></span></div>
+  <progress id="stProg" value="0" max="1" style="display:none"></progress>
+
+  <h3>Copia de seguridad y compartir</h3>
+  <div class="row">
+    <button class="btn" id="stExport">Exportar configuración</button>
+    <button class="btn" id="stImport">Importar configuración</button>
+    <input type="file" id="stFile" accept=".json,application/json" style="display:none">
+  </div>
+  <div class="row"><label>Nombre de este perfil</label><input type="text" id="stName"></div>
+
+  <h3>Seguridad</h3>
+  <div class="row"><button class="btn" id="stPin">Cambiar PIN</button><button class="btn dan" id="stReset">Restablecer tablero base</button></div>
+  <p class="hint">Para entrar en edición, mantén pulsado el engranaje 2 segundos. PIN inicial: 1234.</p>
+
+  <h3>Licencias y créditos</h3>
+  <div class="lic">
+    <b>Pictogramas:</b> los símbolos pictográficos utilizados son propiedad del Gobierno de Aragón y han sido creados por Sergio Palao para ARASAAC (https://arasaac.org), que los distribuye bajo Licencia Creative Commons BY-NC-SA 4.0.<br>
+    Por esta licencia, <b>Mi Voz es y será siempre gratuito y sin ánimo de lucro</b>. Cualquier copia o adaptación debe citar a sus autores y compartirse con la misma licencia.<br><br>
+    <b>Fotos:</b> las fotos que añade cada familia se guardan solo en su dispositivo y no se envían a ningún sitio.<br>
+    <b>Voz:</b> síntesis de voz del propio dispositivo.
+  </div>
+  <div class="actions"><button class="btn pri" id="stClose">Listo</button></div>
+</div></div>
+
+<script>
+'use strict';
+const APP_VERSION = 'v1.3.0', APP_DATE = '29 de octubre de 2026';
+document.querySelectorAll('.ver').forEach(e => e.textContent = APP_VERSION);
+document.getElementById('verDate').textContent = APP_DATE;
+/* =====================================================================
+   Mi Voz — comunicador SAAC con conjugación automática
+   ===================================================================== */
+
+/* ---------- 1. Motor de conjugación ---------- */
+const PERSONS = ['1s','2s','3s','1p','2p','3p'];
+const IRR = {
+  querer:'quiero quieres quiere queremos queréis quieren', poder:'puedo puedes puede podemos podéis pueden',
+  tener:'tengo tienes tiene tenemos tenéis tienen', hacer:'hago haces hace hacemos hacéis hacen',
+  ir:'voy vas va vamos vais van', venir:'vengo vienes viene venimos venís vienen',
+  decir:'digo dices dice decimos decís dicen', dar:'doy das da damos dais dan', ver:'veo ves ve vemos veis ven',
+  ser:'soy eres es somos sois son', estar:'estoy estás está estamos estáis están',
+  dormir:'duermo duermes duerme dormimos dormís duermen', jugar:'juego juegas juega jugamos jugáis juegan',
+  pensar:'pienso piensas piensa pensamos pensáis piensan', 'oír':'oigo oyes oye oímos oís oyen',
+  salir:'salgo sales sale salimos salís salen', poner:'pongo pones pone ponemos ponéis ponen',
+  saber:'sé sabes sabe sabemos sabéis saben', sentir:'siento sientes siente sentimos sentís sienten',
+  volver:'vuelvo vuelves vuelve volvemos volvéis vuelven', cerrar:'cierro cierras cierra cerramos cerráis cierran',
+  empezar:'empiezo empiezas empieza empezamos empezáis empiezan', pedir:'pido pides pide pedimos pedís piden',
+  vestir:'visto vistes viste vestimos vestís visten', sentar:'siento sientas sienta sentamos sentáis sientan',
+  coger:'cojo coges coge cogemos cogéis cogen', merendar:'meriendo meriendas merienda merendamos merendáis meriendan',
+  despertar:'despierto despiertas despierta despertamos despertáis despiertan',
+  acostar:'acuesto acuestas acuesta acostamos acostáis acuestan', encontrar:'encuentro encuentras encuentra encontramos encontráis encuentran',
+  contar:'cuento cuentas cuenta contamos contáis cuentan', oler:'huelo hueles huele olemos oléis huelen',
+  morder:'muerdo muerdes muerde mordemos mordéis muerden', llover:'llueve llueve llueve llueve llueve llueve',
+  probar:'pruebo pruebas prueba probamos probáis prueban', mover:'muevo mueves mueve movemos movéis mueven',
+  traer:'traigo traes trae traemos traéis traen', caer:'caigo caes cae caemos caéis caen',
+  conducir:'conduzco conduces conduce conducimos conducís conducen', conocer:'conozco conoces conoce conocemos conocéis conocen',
+  reír:'río ríes ríe reímos reís ríen', elegir:'elijo eliges elige elegimos elegís eligen',
+  seguir:'sigo sigues sigue seguimos seguís siguen', servir:'sirvo sirves sirve servimos servís sirven',
+  repetir:'repito repites repite repetimos repetís repiten', calentar:'caliento calientas calienta calentamos calentáis calientan',
+  fregar:'friego friegas friega fregamos fregáis friegan', soñar:'sueño sueñas sueña soñamos soñáis sueñan',
+  doler:'duelo dueles duele dolemos doléis duelen',
+  construir:'construyo construyes construye construimos construís construyen'
+};
+const DATIVE = new Set(['gustar','doler','encantar','molestar','apetecer','picar','importar','interesar']);
+const DAT_CLITIC = {'1s':'me','2s':'te','3s':'le','1p':'nos','2p':'os','3p':'les'};
+const REF_CLITIC = {'1s':'me','2s':'te','3s':'se','1p':'nos','2p':'os','3p':'se'};
+const IMPERATIVE = {dar:'dame', ayudar:'ayúdame', mirar:'mira', venir:'ven', esperar:'espera', parar:'para', abrir:'abre', coger:'cógeme', escuchar:'escucha'};
+
+function conjRegular(inf, p){
+  const i = PERSONS.indexOf(p); const end = inf.slice(-2); const st = inf.slice(0,-2);
+  const E = {ar:['o','as','a','amos','áis','an'], er:['o','es','e','emos','éis','en'], ir:['o','es','e','imos','ís','en'], 'ír':['o','es','e','imos','ís','en']}[end];
+  return E ? st + E[i] : inf;
+}
+function conjSimple(inf, p){
+  if (IRR[inf]) return IRR[inf].split(' ')[PERSONS.indexOf(p)];
+  return conjRegular(inf, p);
+}
+/** Devuelve la forma conjugada (incluye pronombre átono: "me gusta", "me lavo"). p='inf' → infinitivo */
+function conjugate(inf, p){
+  inf = (inf||'').trim().toLowerCase();
+  if (!inf || p === 'inf') return inf;
+  if (inf.includes(' ')) { // "lavarse las manos", "hacer caca": conjugar solo la primera palabra
+    const [h, ...rest] = inf.split(' '); return conjugate(h, p) + ' ' + rest.join(' ');
+  }
+  if (DATIVE.has(inf)) return DAT_CLITIC[p] + ' ' + conjSimple(inf, '3s');
+  if (/(ar|er|ir|ír)se$/.test(inf)) { const base = inf.slice(0,-2); return REF_CLITIC[p] + ' ' + conjSimple(base, p); }
+  return conjSimple(inf, p);
+}
+function combinePersons(list){
+  if (!list.length) return null;
+  if (list.length === 1) return list[0];
+  if (list.some(p => p[0]==='1')) return '1p';
+  if (list.some(p => p[0]==='2')) return '2p';
+  return '3p';
+}
+/** Estado gramatical de la frase actual → cómo debe aparecer el próximo verbo/adjetivo */
+function grammarState(tokens){
+  let subj = [], afterVerb = false;
+  for (const t of tokens){
+    if (t.k === 'per'){ if (afterVerb){ subj = []; afterVerb = false; } subj.push(t); }
+    else if (t.k === 'ver') afterVerb = true;
+  }
+  const empty = tokens.length === 0;
+  return { subj, afterVerb, empty, person: combinePersons(subj.map(s => s.person||'3s')) };
+}
+const MOTION = new Set(['ir','venir','volver','salir','llegar','entrar']);
+const NO_ART = new Set(['casa','terapia','clase','comer','dormir']);
+const ART_EX = {mano:'la', agua:'el', 'médico':'el', foto:'la', moto:'la', radio:'la', pis:'el', sed:'la', hambre:'el', 'mamá':'', 'papá':'', leche:'la', tele:'la', noche:'la', tarde:'la', llave:'la', sal:'la', flor:'la', luz:'la', 'día':'el', mapa:'el', 'sofá':'el', pijama:'el', problema:'el', idioma:'el', 'plátano':'el'};
+const PREP_CON = new Set('jugar ir venir estar comer dormir hablar pasear bailar cantar salir quedar vivir correr trabajar dibujar bañar cenar merendar desayunar almorzar leer cocinar viajar volver entrar'.split(' '));
+const PREP_A = new Set('ver mirar llamar abrazar besar ayudar querer necesitar buscar esperar escuchar saludar conocer llevar traer pegar cuidar despertar mimar cargar sentar'.split(' '));
+const PLAY_A = new Set(['pelota','fútbol','balón','baloncesto','cartas','escondite','tenis','pilla pilla','corre que te pillo']);
+const ART_V = new Set('ver mirar coger abrir cerrar poner usar'.split(' '));
+const POSS = new Set('abuelo abuela abuelos abuelito abuelita hermano hermana hermanos tío tía tíos primo prima primos amigo amiga amigos'.split(' '));
+const ART_PER = {profe:'la', profesor:'el', profesora:'la', 'médico':'el', 'médica':'la', doctor:'el', doctora:'la', 'seño':'la', 'maestra':'la', 'maestro':'el'};
+function articleFor(w){
+  const h = w.split(' ')[0];
+  if (NO_ART.has(h)) return '';
+  if (ART_EX[h] !== undefined) return ART_EX[h];
+  if (/as$/.test(h)) return 'las'; if (/(os|es)$/.test(h)) return 'los';
+  if (/(a|ión|dad)$/.test(h)) return 'la'; return 'el';
+}
+function feminize(w){
+  return w.split(' ').map(x => /o$/.test(x) ? x.slice(0,-1)+'a' : x).join(' ');
+}
+/** Texto que muestra y dice un botón según la frase */
+function formFor(cell, st, S){
+  const base = (cell.label||'').trim();
+  if (cell.k === 'ver'){
+    if (st.afterVerb) return base.toLowerCase();
+    if (!st.subj.length){
+      const inf = base.toLowerCase();
+      if (st.empty && S.imperative && IMPERATIVE[inf]) return IMPERATIVE[inf];
+      return S.implicitYo ? conjugate(inf, '1s') : inf;
+    }
+    return conjugate(base, st.person);
+  }
+  if (cell.k === 'des' && cell.gAdj){
+    let g;
+    if (st.subj.length === 1) g = st.subj[0].person === '1s' ? S.gender : (st.subj[0].g || 'm');
+    else if (!st.subj.length) g = S.gender;
+    else g = st.subj.every(s => (s.person==='1s'?S.gender:s.g) === 'f') ? 'f' : 'm';
+    return g === 'f' ? feminize(base.toLowerCase()) : base.toLowerCase();
+  }
+  return base.toLowerCase();
+}
+/** Construye la oración hablada a partir de los tokens (dativos, negación, "y" entre sujetos) */
+function buildSentence(tokens, S){
+  const out = tokens.map(t => ({...t, say: t.text}));
+  // Mover NO delante del verbo: NO + (sujetos) + verbo → (sujetos) no verbo
+  for (let i = 0; i < out.length; i++){
+    if (out[i].isNo && out[i+1] && out[i+1].k === 'per'){
+      let j = i+1; while (out[j] && out[j].k === 'per') j++;
+      if (out[j] && out[j].k === 'ver'){ const [no] = out.splice(i,1); out.splice(j-1,0,no); }
+    }
+  }
+  // Sin sujeto: se sobreentiende YO ("quiero jugar" → "yo quiero jugar")
+  { const f = out.findIndex(t => !t.isNo);
+    if (S.implicitYo && f >= 0 && out[f].k === 'ver'){
+      const inf = (out[f].inf||'').split(' ')[0];
+      const imp = IMPERATIVE[inf] && out[f].text === IMPERATIVE[inf];
+      if (!DATIVE.has(inf) && !imp) out.unshift({k:'per', person:'1s', g:S.gender, pron:true, text:'yo', say:'yo'});
+    } }
+  // Grupos de sujetos seguidos de verbo
+  for (let i = 0; i < out.length; i++){
+    if (out[i].k !== 'per') continue;
+    let j = i; while (out[j] && out[j].k === 'per') j++;
+    // "mamá y yo" en lugar de "yo y mamá"
+    const seg = out.slice(i, j); const me = seg.filter(g => g.person === '1s'); const others = seg.filter(g => g.person !== '1s');
+    if (me.length && others.length) out.splice(i, j - i, ...others, ...me);
+    const group = out.slice(i, j);
+    let v = j; if (out[v] && out[v].isNo) v++;
+    const verb = out[v] && out[v].k === 'ver' ? out[v] : null;
+    // Personas tras un verbo y sin otro verbo detrás = complemento: "jugar con mi abuelo", "ver a mamá"
+    const prevV = out.slice(0, i).reverse().find(t => t.k === 'ver');
+    if (prevV && !verb){
+      const lv = (prevV.inf||'').split(' ')[0];
+      const prep = PREP_CON.has(lv) ? 'con' : PREP_A.has(lv) ? 'a' : '';
+      group.forEach((g, n) => {
+        const w = (g.text||'').toLowerCase(); const h = w.split(' ')[0];
+        let t = w;
+        if (g.person === '1s') t = prep === 'con' ? 'conmigo' : prep === 'a' ? 'a mí' : 'yo';
+        else if (g.person === '2s') t = prep === 'con' ? 'contigo' : prep === 'a' ? 'a ti' : 'tú';
+        else {
+          if (POSS.has(h)) t = 'mi ' + w; else if (ART_PER[h]) t = ART_PER[h] + ' ' + w;
+          if (n === 0 && prep) t = prep + ' ' + t;
+        }
+        g.say = (n > 0 ? 'y ' : '') + t;
+      });
+      i = j - 1; continue;
+    }
+    const dative = verb && DATIVE.has((verb.inf||'').split(' ')[0]);
+    group.forEach((g, n) => { if (n > 0) g.say = 'y ' + g.say; });
+    if (verb && dative){
+      group.forEach(g => { if (['1s','2s','1p','2p'].includes(g.person)) g.say = ''; });
+      const named = group.filter(g => g.say);
+      if (named.length){ named[0].say = 'a ' + named[0].say.replace(/^y /,''); }
+    } else if (verb && S.dropPron){
+      group.forEach(g => { if (g.pron) g.say = ''; });
+    }
+    i = j - 1;
+  }
+  // Artículos y "a/al" tras verbos de movimiento o con gustar/doler
+  let lastVerb = null;
+  out.forEach(t => {
+    if (t.k === 'ver'){ lastVerb = (t.inf||'').split(' ')[0]; return; }
+    if (t.k !== 'cos' || !lastVerb) return;
+    const w = t.say.toLowerCase();
+    if (lastVerb === 'jugar'){
+      const a = articleFor(w); const pr = PLAY_A.has(w) ? 'a' : 'con';
+      t.say = (pr === 'a' && a === 'el' ? 'al ' : pr + ' ' + (a ? a + ' ' : '')) + t.say;
+    } else if (ART_V.has(lastVerb) && !t.place){
+      const a = articleFor(w); if (a) t.say = a + ' ' + t.say;
+    } else if (MOTION.has(lastVerb) && t.place){
+      const a = articleFor(w); t.say = (a === 'el' ? 'al ' : 'a ' + (a ? a + ' ' : '')) + t.say;
+    } else if (DATIVE.has(lastVerb)){
+      const a = articleFor(w); if (a) t.say = a + ' ' + t.say;
+    }
+  });
+  let s = out.map(t => t.say).filter(Boolean).join(' ').replace(/\s+/g,' ').trim();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+}
+
+/* ---------- 2. Tablero base (genérico, sin fotos familiares) ---------- */
+// k: per=persona, ver=verbo, des=descriptivo, cos=cosa, soc=social, fol=carpeta, emp=vacío
+function W(label, k, o={}){ return Object.assign({label, k}, o); }
+const P = (l, person, g, pic, pron) => W(l,'per',{person, g, pic, pron:!!pron});
+const V = (l, pic) => W(l,'ver',{pic});
+const D = (l, pic, gAdj) => W(l,'des',{pic, gAdj:!!gAdj});
+const C = (l, pic, q) => W(l,'cos',{pic, q});
+const Sx = (l, pic, q) => W(l,'soc',{pic, q});
+const F = (label, folder, pic, q) => W(label,'fol',{folder, pic, q});
+const E = () => ({k:'emp'});
+const FA = (label, folder, art) => W(label,'fol',{folder, art});
+const COL = (l, hex, g) => W(l,'des',{art:{t:'color', v:hex}, gAdj:!!g});
+const SHP = (l, n) => W(l,'cos',{art:{t:'shape', n, v:'#2563eb'}});
+
+function baseConfig(){
+  const home = [
+    P('yo','1s','m',null,1),   P('mamá','3s','f'),    V('querer',11538), V('ir',8142),    V('dar',28431),   Sx('sí',5584),     D('bien',5397),        C('agua'),
+    P('tú','2s','m',null,1),   W('papá','per',{person:'3s',g:'m',q:'padre'}),    V('jugar',23392),  V('comer',6456), V('ayudar',32648),Sx('no',5526),     D('mal',5504),         C('comida'),
+    P('hermano','3s','m'),     P('hermana','3s','f',2422), V('gustar',37826), V('beber',6061), V('abrir'),  Sx('más',3220),    D('contento',null,1),  C('juguete',9813),
+    P('abuela','3s','f',2243), P('abuelo','3s','m',2244), V('hacer'),   V('dormir',6479), V('parar',7196),  Sx('ya está',28429),D('triste',35545,0),  W('baño','cos',{q:'cuarto de baño',place:true}),
+    P('profe','3s','f',2456),  P('amigo','3s','m'),   V('mirar',6564),   V('estar'),      V('doler'),       Sx('hola'),        D('enfadado',35539,1), W('casa','cos',{place:true}),
+    F('comida','f_com',null,'comida'), F('jugar','f_jug',9813), F('lugares','f_lug',null,'lugar'), F('cuerpo','f_cue',null,'cuerpo'),
+    F('aseo','f_ase',null,'aseo'), F('sentir','f_sen',null,'emociones'), F('acciones','f_acc',null,'acción'), F('social','f_soc',null,'saludar'),
+  ];
+  home.push(FA('colores','f_col',{t:'palette'}), FA('formas','f_for',{t:'shapes'}));
+  while (home.length % 8) home.push(E());
+  const fill = (arr, n=24) => { while (arr.length < n) arr.push(E()); return arr; };
+  const folders = {
+    f_com:{name:'Comida', cells: fill([
+      C('agua'), C('leche'), C('zumo'), C('biberón',4577), C('galleta'), C('pan'), C('yogur'), C('fruta'),
+      C('plátano'), C('manzana'), C('macarrones'), C('arroz'), C('pollo'), C('patatas'), C('queso'), C('helado'),
+      V('comer',6456), V('beber',6061), V('querer',11538), Sx('más',3220), Sx('ya está',28429), D('rico'), C('hambre'), C('sed')])},
+    f_jug:{name:'Jugar', cells: fill([
+      C('pelota'), C('coche'), C('muñeca'), C('peluche'), C('puzle'), C('bloques'), C('dibujos',8089,'dibujos animados'), C('tablet'),
+      C('música'), C('libro'), C('burbujas'), C('plastilina'), C('columpio'), C('tobogán'), C('pintura'), C('tren'),
+      V('jugar',23392), V('pintar'), V('bailar'), V('cantar'), V('leer'), V('correr',6465), V('saltar',11368), Sx('otra vez')])},
+    f_lug:{name:'Lugares', cells: fill([
+      C('casa'), C('escuela',32446), C('parque'), C('playa'), C('piscina'), C('supermercado'), C('coche'), C('calle'),
+      C('médico'), C('casa de los abuelos',null,'abuelos'), C('cama'), C('baño',null,'cuarto de baño'), C('cocina'), C('habitación',null,'dormitorio'), C('salón'), C('terapia',null,'logopeda'),
+      V('ir',8142), V('venir',32669), V('salir'), V('volver'), Sx('aquí'), Sx('allí'), Sx('fuera'), Sx('dentro')])},
+    f_cue:{name:'Cuerpo', cells: fill([
+      C('cabeza',2673), C('ojo'), C('nariz'), C('boca'), C('oreja',2871), C('dientes'), C('pelo'), C('cuello'),
+      C('barriga',28765), C('brazo',2669), C('mano',2928), C('dedo'), C('pierna',8666), C('rodilla'), C('pie',25327), C('culo',null,'nalgas'),
+      V('doler'), D('dolor',null), Sx('pupa',null,'herida'), V('ayudar',32648), D('frío'), D('calor'), E(), E()])},
+    f_ase:{name:'Aseo', cells: fill([
+      C('caca'), C('pis',null,'orinar'), C('pañal',2863), C('orinal'), C('váter',null,'inodoro'), C('papel',null,'papel higiénico'), C('jabón'), C('toalla'),
+      V('bañarse',null), V('ducharse',11244), V('lavarse las manos',null), V('lavarse los dientes',null), V('peinarse'), V('vestirse'), V('hacer'), V('cambiar'),
+      C('pijama'), C('camiseta'), C('pantalón'), C('zapatos'), C('calcetines'), C('abrigo'), C('gorro'), E()])},
+    f_sen:{name:'Sentir', cells: fill([
+      D('contento',null,1), D('triste',35545), D('enfadado',35539,1), D('cansado',35537,1), D('asustado',null,1), D('aburrido',null,1), D('nervioso',null,1), D('tranquilo',null,1),
+      D('divertido',24733,1), D('bien',5397), D('mal',5504), D('malo',null,1), C('hambre'), C('sed'), C('sueño'), C('miedo'),
+      V('tener'), V('estar'), V('sentir'), V('llorar'), V('reír'), V('doler'), Sx('abrazo'), Sx('beso')])},
+    f_acc:{name:'Acciones', cells: fill([
+      V('tener'), V('necesitar',37160), V('ver',6564), V('oír'), V('coger'), V('poner'), V('quitar'), V('sentarse'),
+      V('levantarse'), V('subir'), V('bajar'), V('cerrar'), V('encender'), V('apagar'), V('esperar',36914), V('pensar',38796),
+      V('decir',9693), V('escuchar'), V('buscar'), V('tirar'), V('romper'), V('limpiar'), V('nadar'), V('venir',32669)])},
+    f_col:{name:'Colores', cells: fill([
+      COL('rojo','#e53935',1), COL('azul','#1e66d6'), COL('amarillo','#fdd835',1), COL('verde','#2e9e44'), COL('naranja','#fb8c00'), COL('morado','#8e24aa',1), COL('rosa','#f48fb1'), COL('marrón','#795548'),
+      COL('negro','#212121',1), COL('blanco','#ffffff',1), COL('gris','#9e9e9e'), COL('celeste','#4fc3f7'), V('querer',11538), V('gustar',37826), V('ser'), Sx('más',3220),
+      Sx('otra vez')])},
+    f_for:{name:'Formas', cells: fill([
+      SHP('círculo','circle'), SHP('cuadrado','square'), SHP('triángulo','triangle'), SHP('rectángulo','rectangle'), SHP('óvalo','oval'), SHP('rombo','diamond'), SHP('estrella','star'), SHP('corazón','heart'),
+      SHP('pentágono','pentagon'), SHP('hexágono','hexagon'), V('querer',11538), V('gustar',37826), V('ver',6564), V('ser'), Sx('más',3220), Sx('otra vez')])},
+    f_soc:{name:'Social', cells: fill([
+      Sx('hola'), Sx('adiós'), Sx('gracias'), Sx('por favor'), Sx('perdón'), Sx('sí',5584), Sx('no',5526), Sx('ayuda'),
+      Sx('¿qué?',null,'qué'), Sx('¿dónde?',null,'dónde'), Sx('¿quién?',null,'quién'), Sx('¿cuándo?',null,'cuándo'), Sx('ya',25736), Sx('ahora'), Sx('después'), Sx('otra vez'),
+      Sx('mío'), Sx('tuyo'), Sx('nada',29839), Sx('todo'), Sx('mucho'), Sx('poco'), Sx('te quiero',null,'querer'), Sx('buenas noches')])},
+  };
+  return { app:'mivoz', v:2, name:'Tablero base', cols:8, home, folders };
+}
+const DEFAULT_SETTINGS = { voice:'', rate:0.9, speakTap:true, conjBtn:true, implicitYo:true, imperative:true, dropPron:false,
+  gender:'m', textPos:'above', lbSize:15, upper:true, returnHome:true, debounce:true, idleClear:true, idleSecs:30, palm:true, pinHash:hashPin('1234') };
+
+/* ---------- 3. Almacenamiento (IndexedDB con respaldo en memoria) ---------- */
+const mem = new Map();
+let idb = null;
+function openDB(){
+  return new Promise(res => {
+    try{
+      const r = indexedDB.open('mivoz', 1);
+      r.onupgradeneeded = () => { const d = r.result; ['kv','img','photos'].forEach(s => d.objectStoreNames.contains(s) || d.createObjectStore(s)); };
+      r.onsuccess = () => { idb = r.result; res(); };
+      r.onerror = () => res();
+    }catch(e){ res(); }
+  });
+}
+function dbGet(store, key){
+  if (!idb) return Promise.resolve(mem.get(store+':'+key));
+  return new Promise(res => { try{ const q = idb.transaction(store).objectStore(store).get(key); q.onsuccess = () => res(q.result); q.onerror = () => res(undefined); }catch(e){ res(undefined); } });
+}
+function dbSet(store, key, val){
+  mem.set(store+':'+key, val);
+  if (!idb) return Promise.resolve();
+  return new Promise(res => { try{ const tx = idb.transaction(store,'readwrite'); tx.objectStore(store).put(val, key); tx.oncomplete = res; tx.onerror = res; }catch(e){ res(); } });
+}
+function dbDel(store, key){
+  mem.delete(store+':'+key);
+  if (!idb) return Promise.resolve();
+  return new Promise(res => { try{ const tx = idb.transaction(store,'readwrite'); tx.objectStore(store).delete(key); tx.oncomplete = res; tx.onerror = res; }catch(e){ res(); } });
+}
+function dbKeys(store){
+  if (!idb) return Promise.resolve([...mem.keys()].filter(k => k.startsWith(store+':')).map(k => k.slice(store.length+1)));
+  return new Promise(res => { try{ const q = idb.transaction(store).objectStore(store).getAllKeys(); q.onsuccess = () => res(q.result); q.onerror = () => res([]); }catch(e){ res([]); } });
+}
+
+/* ---------- 4. Pictogramas ARASAAC con caché local ---------- */
+const API = 'https://api.arasaac.org/v1/pictograms/es';
+const picURL = id => `https://static.arasaac.org/pictograms/${id}/${id}_300.png`;
+const objURLs = new Map();   // id -> objectURL
+let picIds = {};             // palabra -> id resuelto
+const photos = new Map();    // photoId -> dataURL
+
+const Q_ALT = {puzle:['puzzle','rompecabezas'], 'váter':['inodoro'], tablet:['tableta'], 'otra vez':['repetir']};
+async function resolvePicId(cell){
+  if (cell.pic) return cell.pic;
+  const q0 = (cell.q || cell.label || '').toLowerCase().replace(/[¿?¡!]/g,'').trim();
+  if (!q0) return null;
+  // Candidatos: palabra tal cual, alternativas, y para verbos con "se" (bañarse) el verbo sin "se" (bañar)
+  const cands = [q0, ...(Q_ALT[q0] || [])];
+  const first = q0.split(' ')[0];
+  if (/(ar|er|ir|ír)se$/.test(first)) cands.push(q0.replace(first, first.slice(0,-2)), first.slice(0,-2));
+  for (const q of cands){
+    if (picIds[q]) return picIds[q];
+    if (picIds[q] === null) continue;
+    try{
+      let r = await fetch(`${API}/bestsearch/${encodeURIComponent(q)}`);
+      if (!r.ok) r = await fetch(`${API}/search/${encodeURIComponent(q)}`);
+      if (r.ok){ const j = await r.json(); const id = j && j[0] && j[0]._id;
+        if (id){ picIds[q] = id; dbSet('kv','picIds',picIds); return id; } }
+      if (r.status === 404){ picIds[q] = null; }
+    }catch(e){ return null; } // sin conexión: no marcar como inexistente
+  }
+  return null;
+}
+async function picSrc(id){
+  if (!id) return null;
+  if (objURLs.has(id)) return objURLs.get(id);
+  const blob = await dbGet('img', id);
+  if (blob){ const u = URL.createObjectURL(blob); objURLs.set(id,u); return u; }
+  try{
+    const r = await fetch(picURL(id)); if (!r.ok) throw 0;
+    const b = await r.blob(); await dbSet('img', id, b);
+    const u = URL.createObjectURL(b); objURLs.set(id,u); return u;
+  }catch(e){ return picURL(id); } // último recurso: cargar directo
+}
+async function fillImage(el, cell){
+  el.innerHTML = '';
+  if (cell.photo && photos.has(cell.photo)){
+    const img = new Image(); img.className = 'photo'; img.src = photos.get(cell.photo); img.alt = '';
+    el.classList.add('hasphoto'); el.appendChild(img); el.parentElement && el.parentElement.classList.contains('cell') && el.parentElement.classList.add('photo-cell'); return;
+  }
+  el.classList.remove('hasphoto'); el.parentElement && el.parentElement.classList.remove('photo-cell');
+  if (cell.art && !cell.pic){ el.innerHTML = '<div class="art">' + artSVG(cell.art) + '</div>'; return; }
+  const id = await resolvePicId(cell);
+  const src = await picSrc(id);
+  if (src){ const img = new Image(); img.alt=''; img.draggable=false; img.src = src; img.onerror = () => { el.innerHTML = noImg(cell); }; el.appendChild(img); }
+  else el.innerHTML = noImg(cell);
+}
+function poly(n, r, cx, cy){ let pts = []; for (let i = 0; i < n; i++){ const a = (-90 + i*360/n) * Math.PI/180; pts.push((cx + r*Math.cos(a)).toFixed(1) + ',' + (cy + r*Math.sin(a)).toFixed(1)); } return pts.join(' '); }
+function starPts(){ let pts = []; for (let i = 0; i < 10; i++){ const r = i % 2 ? 19 : 46, a = (-90 + i*36) * Math.PI/180; pts.push((50 + r*Math.cos(a)).toFixed(1) + ',' + (54 + r*Math.sin(a)).toFixed(1)); } return pts.join(' '); }
+function artSVG(a){
+  const ln = 'stroke="#334155" stroke-width="3" stroke-linejoin="round"';
+  const wrap = inner => `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${inner}</svg>`;
+  if (a.t === 'color') return wrap(`<rect x="8" y="8" width="84" height="84" rx="16" fill="${a.v}" ${ln}/>`);
+  if (a.t === 'palette') return wrap([['#e53935',8,8],['#1e66d6',54,8],['#fdd835',8,54],['#2e9e44',54,54]].map(([c,x,y]) => `<rect x="${x}" y="${y}" width="38" height="38" rx="8" fill="${c}" ${ln}/>`).join(''));
+  if (a.t === 'shapes') return wrap(`<circle cx="28" cy="28" r="20" fill="#2563eb" ${ln}/><rect x="56" y="8" width="36" height="36" rx="3" fill="#fdd835" ${ln}/><path d="M50 56 L86 94 L14 94 Z" fill="#e53935" ${ln}/>`);
+  const f = `fill="${a.v || '#2563eb'}" ${ln}`;
+  const S_ = {
+    circle:`<circle cx="50" cy="50" r="42" ${f}/>`,
+    square:`<rect x="10" y="10" width="80" height="80" rx="3" ${f}/>`,
+    triangle:`<path d="M50 8 L94 88 L6 88 Z" ${f}/>`,
+    rectangle:`<rect x="5" y="25" width="90" height="50" rx="3" ${f}/>`,
+    oval:`<ellipse cx="50" cy="50" rx="45" ry="29" ${f}/>`,
+    diamond:`<path d="M50 5 L94 50 L50 95 L6 50 Z" ${f}/>`,
+    star:`<polygon points="${starPts()}" ${f}/>`,
+    heart:`<path d="M50 88 C18 63 6 45 6 30 C6 17 16 8 28 8 C38 8 46 13 50 21 C54 13 62 8 72 8 C84 8 94 17 94 30 C94 45 82 63 50 88 Z" ${f}/>`,
+    pentagon:`<polygon points="${poly(5,46,50,54)}" ${f}/>`,
+    hexagon:`<polygon points="${poly(6,46,50,50)}" ${f}/>`
+  };
+  return wrap(S_[a.n] || '');
+}
+const noImg = c => `<span class="noimg">${(c.label||'?').charAt(0).toUpperCase()}</span>`;
+
+/* ---------- 5. Estado y render ---------- */
+let pinned = [], adding = false;
+let CFG, S, tokens = [], view = 'home', editing = false, moveMode = false, moveSel = null;
+const $ = id => document.getElementById(id);
+const board = $('board');
+const cellsOf = f => f === 'home' ? CFG.home : CFG.folders[f].cells;
+const currentCells = () => cellsOf(view);
+const shownViews = () => { if (editing || view === 'home') return [view]; const l = pinned.filter(f => CFG.folders[f]); if (!l.includes(view)) l.push(view); return l; };
+function resetPins(){ pinned = []; adding = false; }
+function renderFbar(){
+  const bar = $('fbar'); bar.innerHTML = '';
+  if (editing || (view === 'home' && !pinned.length)){ bar.classList.remove('on'); return; }
+  bar.classList.add('on');
+  const mk = (cls, html, fn) => { const b = document.createElement('button'); b.className = cls; b.innerHTML = html; b.onclick = fn; bar.appendChild(b); return b; };
+  if (view !== 'home'){
+    const isP = pinned.includes(view);
+    mk('fb' + (isP ? ' on' : ''), isP ? '📌 Fijada ✓' : '📌 Fijar', () => { if (isP) pinned = pinned.filter(f => f !== view); else pinned.push(view); render(); });
+    mk('fb', '＋ Otra carpeta', () => { if (!pinned.includes(view)) pinned.push(view); adding = true; view = 'home'; render(); });
+  } else { const h = document.createElement('span'); h.className = 'fhint'; h.textContent = 'Elige otra carpeta'; bar.appendChild(h); }
+  pinned.filter(f => CFG.folders[f]).forEach(f => mk('fchip', CFG.folders[f].name + ' ✕', () => { pinned = pinned.filter(x => x !== f); if (view === 'home' && !pinned.length) adding = false; render(); }));
+}
+
+function applySettingsUI(){
+  document.body.classList.toggle('upper', !!S.upper);
+  document.documentElement.style.setProperty('--lbsize', S.lbSize + 'px');
+}
+function render(){
+  const cols = CFG.cols; const secs = shownViews();
+  const all = []; secs.forEach(f => { const cs = cellsOf(f); cs.forEach((c, i) => all.push({c, i, f})); while (all.length % cols) all.push({c:{k:'emp'}, i:-1, f}); });
+  const rows = Math.ceil(all.length / cols);
+  board.style.gridTemplateColumns = `repeat(${cols}, minmax(0,1fr))`;
+  board.style.gridTemplateRows = `repeat(${rows}, minmax(0,1fr))`;
+  const st = grammarState(tokens);
+  board.innerHTML = '';
+  all.forEach(({c:cell, i, f}, n) => {
+    const d = document.createElement('div');
+    d.className = 'cell ' + (cell.k || 'emp') + (S.textPos === 'below' ? ' below' : '') + (cell.hidden ? ' hid' : '');
+    d.dataset.i = i; d.dataset.f = f;
+    if (cell.k && cell.k !== 'emp'){
+      const lb = document.createElement('div'); lb.className = 'lb';
+      lb.textContent = (cell.k === 'ver' && !S.conjBtn) ? cell.label : (cell.k === 'fol' ? cell.label : formFor(cell, st, S));
+      const im = document.createElement('div'); im.className = 'im';
+      d.append(lb, im); fillImage(im, cell);
+      if (editing && cell.hidden){ const t = document.createElement('span'); t.className='edit-tag'; t.textContent='oculto'; d.appendChild(t); }
+    }
+    if (moveSel === i && f === view) d.classList.add('sel');
+    board.appendChild(d);
+  });
+  $('btnHome').style.display = (view === 'home' && !pinned.length) ? 'none' : 'flex';
+  renderFbar();
+  renderSentence();
+}
+function updateLabels(){ // re-etiqueta verbos/adjetivos sin recargar imágenes
+  const st = grammarState(tokens);
+  board.querySelectorAll('.cell').forEach(d => {
+    const c = (cellsOf(d.dataset.f) || [])[+d.dataset.i]; if (!c || !(c.k === 'ver' || c.k === 'des')) return;
+    const lb = d.querySelector('.lb'); if (!lb) return;
+    lb.textContent = (c.k === 'ver' && !S.conjBtn) ? c.label : formFor(c, st, S);
+  });
+}
+function renderSentence(){
+  const box = $('sentence'); box.innerHTML = '';
+  if (!tokens.length){ box.innerHTML = '<span class="ph">Toca los pictogramas…</span>'; return; }
+  tokens.forEach(t => {
+    const ch = document.createElement('div'); ch.className = 'chip';
+    ch.style.borderColor = `var(--${t.k}-bd, var(--otr-bd))`;
+    const im = document.createElement('div'); im.className = 'im';
+    const tx = document.createElement('div'); tx.className = 'tx'; tx.textContent = t.text;
+    ch.append(im, tx); box.appendChild(ch); fillImage(im, t.cell);
+  });
+  box.scrollLeft = box.scrollWidth;
+}
+
+/* ---------- 6. Voz ---------- */
+let voices = [];
+function loadVoices(){
+  voices = (speechSynthesis.getVoices() || []).filter(v => /^es/i.test(v.lang));
+  const sel = $('stVoice'); sel.innerHTML = '';
+  voices.forEach(v => { const o = document.createElement('option'); o.value = v.name; o.textContent = `${v.name} (${v.lang})`; sel.appendChild(o); });
+  if (!voices.length){ const o = document.createElement('option'); o.textContent = 'Voz del sistema (español)'; o.value=''; sel.appendChild(o); }
+  sel.value = S.voice || (voices.find(v => v.lang === 'es-ES') || voices[0] || {}).name || '';
+}
+function speak(text){
+  if (!text || !('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'es-ES'; u.rate = S.rate;
+  const v = voices.find(v => v.name === S.voice) || voices.find(v => v.lang === 'es-ES') || voices[0];
+  if (v){ u.voice = v; u.lang = v.lang; }
+  speechSynthesis.speak(u);
+}
+
+/* ---------- 7. Interacción ---------- */
+let lastTap = {i:-1, t:0};
+board.addEventListener('click', e => {
+  const d = e.target.closest('.cell'); if (!d) return;
+  const i = +d.dataset.i; const cf = d.dataset.f || view; const cell = cellsOf(cf)[i];
+  if (i < 0) return;
+  if (editing){
+    if (moveMode){
+      if (moveSel === null){ moveSel = i; render(); }
+      else { const cs = currentCells(); [cs[moveSel], cs[i]] = [cs[i], cs[moveSel]]; moveSel = null; save(); render(); }
+      return;
+    }
+    openEditor(i); return;
+  }
+  if (!cell || !cell.k || cell.k === 'emp' || cell.hidden) return;
+  const now = Date.now();
+  if (S.debounce && lastTap.i === i && now - lastTap.t < 450) return;
+  lastTap = {i, t:now};
+  d.classList.add('pressed'); setTimeout(() => d.classList.remove('pressed'), 120);
+  if (cell.k === 'fol'){ if (CFG.folders[cell.folder]){ view = cell.folder; adding = false; render(); } return; }
+  const st = grammarState(tokens);
+  const text = formFor(cell, st, S);
+  tokens.push({ cell, k:cell.k, text, person:cell.person, g:cell.g, pron:cell.pron, inf:cell.k==='ver'?cell.label.toLowerCase():null,
+                isNo: cell.k==='soc' && /^no$/i.test(cell.label.trim()), place: !!cell.place || cf === 'f_lug' });
+  if (S.speakTap) speak(text);
+  if (view !== 'home' && S.returnHome && !pinned.length){ view = 'home'; render(); } else { updateLabels(); renderSentence(); }
+});
+$('btnBack').onclick = () => { tokens.pop(); updateLabels(); renderSentence(); };
+$('btnClear').onclick = () => { tokens = []; updateLabels(); renderSentence(); };
+$('btnSpeak').onclick = () => speak(buildSentence(tokens, S));
+$('sentence').onclick = () => speak(buildSentence(tokens, S));
+$('btnHome').onclick = () => { view = 'home'; resetPins(); render(); };
+$('btnFull').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else (document.documentElement.requestFullscreen || function(){}).call(document.documentElement).catch?.(()=>{});
+};
+
+/* Mantener pulsado el engranaje → PIN (evita que el niño entre por accidente) */
+(function(){
+  const g = $('btnGear'); let t = null;
+  const start = e => { e.preventDefault(); g.classList.add('holding'); $('gearHint').textContent = 'mantén…';
+    t = setTimeout(() => { g.classList.remove('holding'); $('gearHint').textContent=''; askPin(ok => ok && enterEdit()); }, 2000); };
+  const stop = () => { clearTimeout(t); g.classList.remove('holding'); $('gearHint').textContent=''; };
+  g.addEventListener('pointerdown', start); ['pointerup','pointerleave','pointercancel'].forEach(ev => g.addEventListener(ev, stop));
+  g.addEventListener('contextmenu', e => e.preventDefault());
+})();
+
+function enterEdit(){ editing = true; document.body.classList.add('editing'); tokens = []; render(); status('Modo edición: toca un botón para cambiarlo'); }
+function exitEdit(){ editing = false; moveMode = false; moveSel = null; $('eMove').classList.remove('on'); document.body.classList.remove('editing'); status(''); render(); }
+$('eDone').onclick = exitEdit;
+$('eMove').onclick = () => { moveMode = !moveMode; moveSel = null; $('eMove').classList.toggle('on', moveMode);
+  status(moveMode ? 'Toca un botón y luego el hueco donde quieres ponerlo' : 'Modo edición: toca un botón para cambiarlo'); render(); };
+$('eRowAdd').onclick = () => { const cs = currentCells(); for (let i=0;i<CFG.cols;i++) cs.push({k:'emp'}); save(); render(); };
+$('eRowDel').onclick = () => {
+  const cs = currentCells(); if (cs.length <= CFG.cols) return;
+  const last = cs.slice(-CFG.cols);
+  if (last.some(c => c.k && c.k !== 'emp') && !confirm('La última fila tiene botones. ¿Quitarla igualmente?')) return;
+  cs.splice(-CFG.cols); save(); render(); };
+$('eSettings').onclick = openSettings;
+/* Cambiar columnas SIN desordenar: cada botón conserva su fila y su columna */
+function remap(cells, oc, nc){
+  const rows = Math.ceil(cells.length / oc); const out = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < nc; c++) out.push(c < oc ? (cells[r*oc + c] || {k:'emp'}) : {k:'emp'});
+  return out;
+}
+function setCols(nc){
+  const oc = CFG.cols; if (nc < 3 || nc > 12 || nc === oc) return false;
+  if (nc < oc){
+    const all = [CFG.home, ...Object.values(CFG.folders).map(f => f.cells)];
+    const lost = all.some(cs => cs.some((c, i) => (i % oc) >= nc && c.k && c.k !== 'emp'));
+    if (lost && !confirm('La columna de la derecha tiene botones y se quitarán. ¿Seguir?')) return false;
+  }
+  CFG.home = remap(CFG.home, oc, nc);
+  Object.values(CFG.folders).forEach(f => f.cells = remap(f.cells, oc, nc));
+  CFG.cols = nc; save(); render(); return true;
+}
+$('eColAdd').onclick = () => setCols(CFG.cols + 1);
+$('eColDel').onclick = () => setCols(CFG.cols - 1);
+function status(t){ $('status').textContent = t; }
+
+/* ---------- 8. PIN ---------- */
+function hashPin(p){ let h = 2166136261; for (const c of 'mivoz:'+p){ h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h>>>0).toString(16); }
+let pinCb = null, pinVal = '', pinMode = 'check', pinNew = '';
+function askPin(cb, mode='check'){
+  pinCb = cb; pinVal = ''; pinMode = mode; pinNew = '';
+  $('pinTitle').textContent = mode === 'check' ? 'PIN de edición' : 'Nuevo PIN (4 cifras)';
+  $('pinMsg').innerHTML = '&nbsp;'; drawPin(); $('mPin').classList.add('open');
+}
+function drawPin(){ $('pinDots').innerHTML = [0,1,2,3].map(i => `<i class="${i < pinVal.length ? 'f':''}"></i>`).join(''); }
+$('pinPad').innerHTML = [1,2,3,4,5,6,7,8,9,'',0,'⌫'].map(n => n==='' ? '<span></span>' : `<button data-n="${n}">${n}</button>`).join('');
+$('pinPad').onclick = e => {
+  const n = e.target.dataset && e.target.dataset.n; if (n === undefined) return;
+  if (n === '⌫'){ pinVal = pinVal.slice(0,-1); drawPin(); return; }
+  if (pinVal.length >= 4) return;
+  pinVal += n; drawPin();
+  if (pinVal.length === 4) setTimeout(() => {
+    if (pinMode === 'check'){
+      if (hashPin(pinVal) === S.pinHash){ $('mPin').classList.remove('open'); pinCb && pinCb(true); }
+      else { $('pinMsg').textContent = 'PIN incorrecto'; pinVal = ''; drawPin(); }
+    } else if (!pinNew){ pinNew = pinVal; pinVal = ''; $('pinTitle').textContent = 'Repite el nuevo PIN'; drawPin(); }
+    else if (pinNew === pinVal){ S.pinHash = hashPin(pinVal); save(); $('mPin').classList.remove('open'); alert('PIN cambiado'); }
+    else { $('pinMsg').textContent = 'No coinciden. Empieza de nuevo.'; pinNew=''; pinVal=''; $('pinTitle').textContent='Nuevo PIN (4 cifras)'; drawPin(); }
+  }, 120);
+};
+$('pinCancel').onclick = () => { $('mPin').classList.remove('open'); pinCb && pinCb(false); };
+
+/* ---------- 9. Editor de botón ---------- */
+const KINDS = [['per','Persona'],['ver','Verbo'],['cos','Cosa / lugar'],['des','Descriptivo'],['soc','Social'],['fol','Carpeta'],['emp','Vacío']];
+let edIdx = -1, ed = null;
+function openEditor(i){
+  edIdx = i; ed = JSON.parse(JSON.stringify(currentCells()[i] || {k:'emp'}));
+  if (!ed.k) ed.k = 'emp';
+  $('eKinds').innerHTML = KINDS.filter(([k]) => !(k==='fol' && view!=='home')).map(([k,n]) => `<button class="kind ${k} ${ed.k===k?'on':''}" data-k="${k}">${n}</button>`).join('');
+  $('eLabel').value = ed.label || '';
+  $('ePerson').value = ed.person || '3s'; $('eGender').value = ed.g || 'm';
+  $('eGAdj').checked = !!ed.gAdj; $('eHidden').checked = !!ed.hidden;
+  syncEditor(); $('mEdit').classList.add('open');
+}
+function syncEditor(){
+  const k = ed.k; const isEmp = k === 'emp';
+  $('eBody').style.display = isEmp ? 'none' : '';
+  $('eVerbHint').style.display = k==='ver' ? '' : 'none';
+  $('ePersonRow').style.display = k==='per' ? '' : 'none';
+  $('eGenderAdjRow').style.display = k==='des' ? '' : 'none';
+  $('eNoPhoto').style.display = ed.photo ? '' : 'none';
+  $('eRecrop').style.display = ed.photo && photos.has(ed.photo) ? '' : 'none';
+  $('eTitle').textContent = isEmp ? 'Hueco vacío' : 'Editar botón';
+  const prev = $('ePrev'); prev.innerHTML = '';
+  if (!isEmp){ const c = {...ed, label: $('eLabel').value}; const holder = document.createElement('div'); holder.style.cssText='width:100%;height:100%;display:flex;align-items:center;justify-content:center'; prev.appendChild(holder); fillImage(holder, c).then(()=>{ const im = holder.querySelector('img'); if (im && ed.photo) im.className='photo'; }); }
+  const cp = $('eConj');
+  if (k === 'ver' && $('eLabel').value.trim()){
+    const inf = $('eLabel').value.trim().toLowerCase();
+    cp.style.display = ''; cp.innerHTML = `yo <b>${conjugate(inf,'1s')}</b> · tú <b>${conjugate(inf,'2s')}</b> · mamá <b>${conjugate(inf,'3s')}</b> · nosotros <b>${conjugate(inf,'1p')}</b> · ellos <b>${conjugate(inf,'3p')}</b>`
+      + (IRR[inf.split(' ')[0]] || DATIVE.has(inf) ? '' : '<br><span class="hint">Si alguna forma está mal, avísame para añadirlo como verbo irregular.</span>');
+  } else if (k === 'des' && $('eGAdj').checked && $('eLabel').value.trim()){
+    const w = $('eLabel').value.trim().toLowerCase(); cp.style.display=''; cp.innerHTML = `niño: <b>${w}</b> · niña: <b>${feminize(w)}</b>`;
+  } else cp.style.display = 'none';
+}
+$('eKinds').onclick = e => { const k = e.target.dataset.k; if (!k) return; ed.k = k;
+  if (k==='per' && !ed.person) ed.person='3s';
+  if (k==='fol' && !ed.folder){ ed.folder = 'f_' + Date.now().toString(36); }
+  [...$('eKinds').children].forEach(b => b.classList.toggle('on', b.dataset.k===k)); syncEditor(); };
+let lblT; $('eLabel').oninput = () => { clearTimeout(lblT); lblT = setTimeout(() => { if (!ed.pic && !ed.photo) ed.q = ''; syncEditor(); }, 500); };
+$('eGAdj').onchange = syncEditor;
+$('eCancel').onclick = () => $('mEdit').classList.remove('open');
+$('eClearCell').onclick = () => { currentCells()[edIdx] = {k:'emp'}; save(); $('mEdit').classList.remove('open'); render(); };
+$('eSave').onclick = () => {
+  const c = ed; c.label = $('eLabel').value.trim();
+  if (c.k === 'emp'){ currentCells()[edIdx] = {k:'emp'}; }
+  else {
+    if (!c.label){ alert('Escribe un texto para el botón'); return; }
+    if (c.k === 'per'){ c.person = $('ePerson').value; c.g = $('eGender').value; c.pron = ['yo','tú','tu','nosotros','nosotras','ellos','ellas'].includes(c.label.toLowerCase()); }
+    if (c.k === 'des') c.gAdj = $('eGAdj').checked;
+    c.hidden = $('eHidden').checked;
+    if (c.k === 'fol' && !CFG.folders[c.folder]) CFG.folders[c.folder] = { name:c.label, cells: Array.from({length:CFG.cols*3}, () => ({k:'emp'})) };
+    if (c.k === 'fol') CFG.folders[c.folder].name = c.label;
+    currentCells()[edIdx] = c;
+  }
+  save(); $('mEdit').classList.remove('open'); render();
+};
+$('eNoPhoto').onclick = () => { if (ed.photo){ ed.photo = null; } syncEditor(); };
+
+/* Buscador */
+$('eSearch').onclick = () => { $('sQ').value = $('eLabel').value.trim(); $('sRes').innerHTML=''; $('sMsg').textContent=''; $('mSearch').classList.add('open'); if ($('sQ').value) doSearch(); };
+$('sClose').onclick = () => $('mSearch').classList.remove('open');
+$('sGo').onclick = doSearch; $('sQ').onkeydown = e => { if (e.key === 'Enter') doSearch(); };
+async function doSearch(){
+  const q = $('sQ').value.trim(); if (!q) return;
+  $('sMsg').textContent = 'Buscando…'; $('sRes').innerHTML = '';
+  try{
+    const r = await fetch(`${API}/search/${encodeURIComponent(q.toLowerCase())}`);
+    if (!r.ok) throw r.status;
+    const j = await r.json();
+    $('sMsg').textContent = j.length ? `${j.length} resultados. Toca el que quieras.` : 'Sin resultados';
+    j.slice(0,60).forEach(p => { const b = document.createElement('button'); b.innerHTML = `<img loading="lazy" src="${picURL(p._id)}" alt="">`;
+      b.onclick = () => { ed.pic = p._id; ed.photo = null; $('mSearch').classList.remove('open'); syncEditor(); }; $('sRes').appendChild(b); });
+  }catch(e){ $('sMsg').textContent = e === 404 ? 'Sin resultados. Prueba otra palabra.' : 'No hay conexión con ARASAAC. Necesitas internet para buscar.'; }
+}
+
+/* Fotos: recorte cuadrado uniforme 480×480 */
+const fileIn = document.createElement('input'); fileIn.type='file'; fileIn.accept='image/*';
+$('ePhoto').onclick = () => { fileIn.value=''; fileIn.click(); };
+fileIn.onchange = () => { const f = fileIn.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => startCrop(rd.result); rd.readAsDataURL(f); };
+$('eRecrop').onclick = () => { const src = photos.get(ed.photo + ':orig') || photos.get(ed.photo); startCrop(src); };
+let crop = null;
+function startCrop(src){
+  const img = new Image();
+  img.onload = () => { crop = {img, src, z:1, x:0, y:0}; $('cropZoom').value = 0; drawCrop(); $('mCrop').classList.add('open'); };
+  img.src = src;
+}
+function drawCrop(target, size){
+  const cv = target || $('cropCv'); const W = size || cv.width; const ctx = cv.getContext('2d');
+  const {img, z} = crop; const base = Math.max(W / img.width, W / img.height); const s = base * z;
+  const dw = img.width * s, dh = img.height * s;
+  const maxX = Math.abs(dw - W)/2, maxY = Math.abs(dh - W)/2;
+  const k6 = 600 / W; crop.x = Math.max(-maxX*k6, Math.min(maxX*k6, crop.x)); crop.y = Math.max(-maxY*k6, Math.min(maxY*k6, crop.y));
+  ctx.fillStyle = '#fff'; ctx.fillRect(0,0,W,W);
+  ctx.drawImage(img, (W-dw)/2 + crop.x*(W/600), (W-dh)/2 + crop.y*(W/600), dw, dh);
+}
+(function(){
+  const box = $('cropBox'); let p = null;
+  box.addEventListener('pointerdown', e => { p = {x:e.clientX, y:e.clientY}; box.setPointerCapture(e.pointerId); });
+  box.addEventListener('pointermove', e => { if (!p || !crop) return; const k = 600 / box.clientWidth; crop.x += (e.clientX-p.x)*k; crop.y += (e.clientY-p.y)*k; p = {x:e.clientX, y:e.clientY}; drawCrop(); });
+  box.addEventListener('pointerup', () => p = null);
+  $('cropZoom').oninput = e => { crop.z = Math.pow(3, +e.target.value); drawCrop(); };
+})();
+$('cropCancel').onclick = () => $('mCrop').classList.remove('open');
+$('cropOk').onclick = async () => {
+  const out = document.createElement('canvas'); out.width = out.height = 480;
+  const x = crop.x, y = crop.y; drawCrop(out, 480); crop.x = x; crop.y = y;
+  const data = out.toDataURL('image/jpeg', 0.86);
+  const id = 'ph_' + Date.now().toString(36);
+  photos.set(id, data); await dbSet('photos', id, data);
+  ed.photo = id; $('mCrop').classList.remove('open'); syncEditor();
+};
+
+/* ---------- 10. Ajustes ---------- */
+function openSettings(){
+  $('stRate').value = S.rate; $('stRateV').textContent = S.rate + '×';
+  $('stSpeakTap').checked = S.speakTap; $('stConjBtn').checked = S.conjBtn; $('stImplicit').checked = S.implicitYo;
+  $('stImper').checked = S.imperative; $('stDropPron').checked = S.dropPron; $('stGender').value = S.gender;
+  $('stCols').innerHTML = [3,4,5,6,7,8,9,10,11,12].map(n => `<option ${n===CFG.cols?'selected':''}>${n}</option>`).join('');
+  $('stTextPos').value = S.textPos; $('stLb').value = String(S.lbSize); $('stUpper').checked = S.upper;
+  $('stReturn').checked = S.returnHome; $('stDebounce').checked = S.debounce;
+  $('stIdle').checked = S.idleClear !== false; $('stIdleSecs').value = String(S.idleSecs || 30); $('stPalm').checked = S.palm !== false; $('stName').value = CFG.name || '';
+  loadVoices(); $('mSet').classList.add('open');
+}
+$('stRate').oninput = e => $('stRateV').textContent = (+e.target.value).toFixed(2) + '×';
+$('stTest').onclick = () => { S.voice = $('stVoice').value; S.rate = +$('stRate').value; speak('Hola, quiero jugar'); };
+$('stClose').onclick = () => {
+  Object.assign(S, { voice:$('stVoice').value, rate:+$('stRate').value, speakTap:$('stSpeakTap').checked, conjBtn:$('stConjBtn').checked,
+    implicitYo:$('stImplicit').checked, imperative:$('stImper').checked, dropPron:$('stDropPron').checked, gender:$('stGender').value,
+    textPos:$('stTextPos').value, lbSize:+$('stLb').value, upper:$('stUpper').checked, returnHome:$('stReturn').checked, debounce:$('stDebounce').checked,
+    idleClear:$('stIdle').checked, idleSecs:+$('stIdleSecs').value, palm:$('stPalm').checked });
+  const nc = +$('stCols').value;
+  if (nc !== CFG.cols && !setCols(nc)) $('stCols').value = CFG.cols;
+  CFG.name = $('stName').value.trim() || CFG.name;
+  save(); applySettingsUI(); $('mSet').classList.remove('open'); render();
+};
+$('stPin').onclick = () => askPin(null, 'new');
+$('stReset').onclick = async () => {
+  if (!confirm('¿Volver al tablero base? Se perderán los cambios (las fotos siguen guardadas). Exporta antes si quieres conservarlos.')) return;
+  CFG = baseConfig(); await save(); $('mSet').classList.remove('open'); view='home'; resetPins(); render();
+};
+$('stCache').onclick = async () => {
+  const all = [...CFG.home, ...Object.values(CFG.folders).flatMap(f => f.cells)].filter(c => c.k && c.k !== 'emp' && !c.photo && !c.art);
+  const pr = $('stProg'); pr.style.display=''; pr.max = all.length; pr.value = 0; let ok = 0;
+  for (const c of all){ const id = await resolvePicId(c); if (id && await picSrc(id) && objURLs.has(id)) ok++; pr.value++; $('stCacheMsg').textContent = `${pr.value} / ${all.length}`; }
+  $('stCacheMsg').textContent = ok === all.length ? `✓ Listo: ${ok} pictogramas guardados en la tablet.` : `Guardados ${ok} de ${all.length}. Revisa la conexión y vuelve a intentarlo.`;
+};
+
+/* Exportar / importar */
+$('stExport').onclick = async () => {
+  const used = new Set([...CFG.home, ...Object.values(CFG.folders).flatMap(f=>f.cells)].map(c => c.photo).filter(Boolean));
+  const ph = {}; used.forEach(id => { if (photos.has(id)) ph[id] = photos.get(id); });
+  const data = { ...CFG, appVersion: APP_VERSION, settings: {...S, pinHash: undefined}, photos: ph, exported: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `mivoz_${(CFG.name||'perfil').toLowerCase().replace(/[^a-z0-9áéíóúñ]+/gi,'_')}_${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+};
+$('stImport').onclick = () => { $('stFile').value=''; $('stFile').click(); };
+$('stFile').onchange = () => {
+  const f = $('stFile').files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = async () => {
+    try{
+      const j = JSON.parse(rd.result);
+      if (j.app === 'mivoz'){
+        for (const [id, d] of Object.entries(j.photos||{})){ photos.set(id,d); await dbSet('photos', id, d); }
+        const {settings, photos:_, exported, ...cfg} = j; CFG = cfg; if (settings) Object.assign(S, settings, {pinHash:S.pinHash});
+      } else if (j.mbConfig){ CFG = await importExternal(j); }
+      else throw new Error('Formato no reconocido');
+      migrate(CFG); await save(); applySettingsUI(); view='home'; resetPins(); $('mSet').classList.remove('open'); render(); alert('Configuración importada ✓');
+    }catch(e){ alert('No se pudo importar: ' + e.message); }
+  };
+  rd.readAsText(f);
+};
+
+/* Importador de tableros de otros comunicadores en JSON → Mi Voz */
+async function importExternal(j){
+  const mb = typeof j.mbConfig === 'string' ? JSON.parse(j.mbConfig) : j.mbConfig;
+  const media = {}; (j.mediaAssets||[]).forEach(m => { media[m.key] = m.data; });
+  const PEOPLE = {yo:['1s','m',1], 'tú':['2s','m',1], tu:['2s','m',1], mamá:['3s','f'], mama:['3s','f'], papá:['3s','m'], papa:['3s','m'],
+    hermana:['3s','f'], hermano:['3s','m'], abuela:['3s','f'], abuelo:['3s','m'], profe:['3s','f'], tía:['3s','f'], tío:['3s','m']};
+  const SOCIAL = new Set(['sí','si','no','más','mas','ya','ya está','hola','adiós','gracias','nada','por favor']);
+  const DESC = new Set(['bien','mal','triste','enfadado','cansado','divertido','contento','feliz','aburrido','asustado']);
+  const isVerb = w => IRR[w] || DATIVE.has(w) || /^[a-záéíóúñ]+(ar|er|ir|ír)(se)?$/.test(w) && !['azúcar','lugar','hogar','mar','collar','bar','altar','taller'].includes(w);
+  const picFrom = u => { const m = /pictograms\/(\d+)\//.exec(u||''); return m ? +m[1] : null; };
+  async function photoFrom(u){
+    const m = /^idbmedia:[^:]+:(.+)$/.exec(u||''); if (!m || !media[m[1]]) return null;
+    const id = 'ph_' + m[1]; const d = await normalizePhoto(media[m[1]]); photos.set(id, d); await dbSet('photos', id, d); return id;
+  }
+  async function toCell(it){
+    if (!it || it.type === 'spacer') return {k:'emp'};
+    const label = (it.label || it.name || '').trim(); const low = label.toLowerCase();
+    const c = { label: low };
+    c.photo = await photoFrom(it.imageUrl);
+    c.pic = picFrom(it.imageUrl) || (Array.isArray(it.images) ? picFrom(it.images.find(x => /arasaac/.test(x))) : null);
+    if (it.type === 'cat'){ c.k = 'fol'; c.folder = 'n_' + it.id; return c; }
+    if (PEOPLE[low]){ const [p,g,pr] = PEOPLE[low]; Object.assign(c, {k:'per', person:p, g, pron:!!pr}); }
+    else if (SOCIAL.has(low)) c.k = 'soc';
+    else if (DESC.has(low)){ c.k = 'des'; c.gAdj = /o$/.test(low); }
+    else if (isVerb(low)) c.k = 'ver';
+    else c.k = 'cos';
+    return c;
+  }
+  const cols = mb.cols || 8; const home = [];
+  for (const it of (mb.items || [])) home.push(await toCell(it));
+  while (home.length && home.length > cols && home.slice(-cols).every(c => c.k === 'emp')) home.splice(-cols);
+  while (home.length % cols) home.push({k:'emp'});
+  const base = baseConfig(); const folders = {};
+  const byName = {}; Object.entries(base.folders).forEach(([id,f]) => byName[f.name.toLowerCase()] = f);
+  const alias = {lugar:'lugares', sitios:'lugares', acc:'acciones', acciones:'acciones', com:'comida', comida:'comida', sent:'sentir', sentimientos:'sentir', soc:'social', social:'social', cuerpo:'cuerpo', objetos:'jugar', tiempo:'social'};
+  for (const it of (mb.items || []).filter(x => x.type === 'cat')){
+    const own = (j.cats || []).find(c => c.id === it.id);
+    let cells;
+    if (own && own.words && own.words.length){
+      cells = [];
+      for (const w of own.words){
+        const obj = typeof w === 'string' ? {label:w} : w;
+        const c = await toCell({type:'fav', label: obj.label, imageUrl: obj.imageUrl || (obj.images||[])[obj.ci||0]}); cells.push(c);
+      }
+    } else {
+      const f = byName[alias[it.id] || alias[(it.name||'').toLowerCase()] || (it.name||'').toLowerCase()];
+      cells = f ? JSON.parse(JSON.stringify(f.cells)) : [];
+    }
+    while (cells.length < cols*3 || cells.length % cols) cells.push({k:'emp'});
+    folders['n_' + it.id] = { name: it.name, cells };
+  }
+  return { app:'mivoz', v:1, name: (j.user && j.user.name) || 'Importado', cols, home, folders };
+}
+function normalizePhoto(src){ // cualquier foto → cuadrado 480×480 centrado (mismo formato para todas)
+  return new Promise(res => { const img = new Image(); img.onload = () => {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 480; const ctx = cv.getContext('2d');
+    const s = Math.max(480/img.width, 480/img.height); const w = img.width*s, h = img.height*s;
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,480,480); ctx.drawImage(img, (480-w)/2, (480-h)*0.3, w, h);
+    res(cv.toDataURL('image/jpeg', .86)); }; img.onerror = () => res(src); img.src = src; });
+}
+
+/* Tableros guardados antes de la v1.1: añade Colores y Formas SIN mover ningún botón existente */
+function migrate(cfg){
+  if ((cfg.v || 1) >= 2) return false;
+  const b = baseConfig(), cols = cfg.cols;
+  ['f_col','f_for'].forEach(id => {
+    if (cfg.folders[id]) return;
+    const list = b.folders[id].cells.filter(c => c.k && c.k !== 'emp'); const a = list.slice();
+    while (a.length % cols || a.length < cols*2) a.push({k:'emp'});
+    cfg.folders[id] = { name: b.folders[id].name, cells: a };
+  });
+  let lastRow = -1; cfg.home.forEach((c, i) => { if (c && c.k && c.k !== 'emp') lastRow = Math.floor(i / cols); });
+  const r = lastRow + 1; if (r * cols >= cfg.home.length) for (let i = 0; i < cols; i++) cfg.home.push({k:'emp'});
+  cfg.home[r*cols] = FA('colores','f_col',{t:'palette'}); cfg.home[r*cols + 1] = FA('formas','f_for',{t:'shapes'});
+  cfg.v = 2; return true;
+}
+
+/* ---------- 10b. Inactividad, bloqueo y protección contra manos ---------- */
+let locked = false, wakeLock = null, fsLost = false, trapDepth = 0, lastAct = Date.now(), palmUntil = 0;
+const ptrs = new Map(), palmPtr = new Set();
+function liveCount(){ const now = Date.now(); for (const [id, t] of ptrs) if (now - t > 8000) ptrs.delete(id); return ptrs.size; }
+
+/* Borrar la frase y volver al inicio tras X segundos sin tocar */
+setInterval(() => {
+  if (!S || !S.idleClear || editing || locked === undefined || document.querySelector('.modal.open')) return;
+  if (!tokens.length && (view === 'home' || pinned.length)) return;
+  if (Date.now() - lastAct >= (S.idleSecs || 30) * 1000){ tokens = []; if (!pinned.length) view = 'home'; try{ speechSynthesis.cancel(); }catch(e){} render(); }
+}, 1000);
+
+async function getWake(){ try{ if ('wakeLock' in navigator && !wakeLock){ wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => wakeLock = null); } }catch(e){} }
+function pushTrap(){ try{ history.pushState({lock:1}, ''); trapDepth++; }catch(e){} }
+function lock(){
+  locked = true; document.body.classList.add('locked'); dbSet('kv','locked',true);
+  try{ const p = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen({navigationUI:'hide'}); p && p.catch && p.catch(()=>{}); }catch(e){}
+  getWake(); pushTrap(); pushTrap();
+}
+function unlock(){
+  locked = false; document.body.classList.remove('locked'); dbSet('kv','locked',false);
+  try{ wakeLock && wakeLock.release(); }catch(e){} wakeLock = null; palmUntil = 0;
+}
+$('btnLock').onclick = lock;
+
+document.addEventListener('pointerdown', e => {
+  lastAct = Date.now(); ptrs.set(e.pointerId, Date.now());
+  if (!locked) return;
+  if (S && S.palm !== false){
+    const big = e.pointerType === 'touch' && Math.max(e.width || 0, e.height || 0) > 90;
+    if (big || liveCount() >= 3){ ptrs.forEach((_, id) => palmPtr.add(id)); palmUntil = Date.now() + 700; }
+  }
+  if (fsLost){ fsLost = false; try{ const p = document.documentElement.requestFullscreen({navigationUI:'hide'}); p && p.catch && p.catch(()=>{}); }catch(e){} }
+  getWake(); if (trapDepth < 3) pushTrap();
+}, true);
+const ptrUp = e => { ptrs.delete(e.pointerId); if (palmPtr.delete(e.pointerId)) palmUntil = Date.now() + 400; };
+['pointerup','pointercancel'].forEach(ev => document.addEventListener(ev, ptrUp, true));
+document.addEventListener('keydown', () => lastAct = Date.now(), true);
+/* Toques de palma o de muchos dedos a la vez: no cuentan como pulsación */
+document.addEventListener('click', e => {
+  if (locked && S && S.palm !== false && (Date.now() < palmUntil || liveCount() >= 3)){ e.stopPropagation(); e.preventDefault(); }
+}, true);
+document.addEventListener('contextmenu', e => { if (!e.target.closest || !e.target.closest('input,textarea')) e.preventDefault(); });
+document.addEventListener('touchstart', e => { if (locked && e.touches.length > 1 && e.cancelable) e.preventDefault(); }, {passive:false});
+document.addEventListener('touchmove', e => { if (locked && e.cancelable && !(e.target.closest && e.target.closest('.sheet,#sentence'))) e.preventDefault(); }, {passive:false});
+['gesturestart','gesturechange'].forEach(ev => document.addEventListener(ev, e => { if (locked) e.preventDefault(); }));
+window.addEventListener('beforeunload', e => { if (locked){ e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('popstate', () => { trapDepth = Math.max(0, trapDepth - 1); if (locked && trapDepth < 2) pushTrap(); });
+document.addEventListener('fullscreenchange', () => { if (locked && !document.fullscreenElement) fsLost = true; });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible'){ ptrs.clear(); if (locked) getWake(); } });
+
+/* Desbloqueo: mantener pulsado el candado 1,2 s y arrastrarlo hasta el final */
+(function(){
+  const pill = $('lockPill'), knob = $('lockKnob'), fill = $('lockFill'), txt = $('lockTxt'); let t = null, st = null;
+  const travel = () => pill.clientWidth - knob.offsetWidth - 4;
+  function reset(){ clearTimeout(t); st = null; knob.classList.remove('armed','holding'); knob.classList.add('snap'); knob.style.transform = ''; fill.style.width = '0'; txt.textContent = 'Mantén 1 s y arrastra →'; }
+  knob.addEventListener('pointerdown', e => {
+    if (!locked || st) return; e.preventDefault(); e.stopPropagation();
+    st = {id:e.pointerId, x:e.clientX, armed:false}; knob.classList.remove('snap'); knob.classList.add('holding');
+    try{ knob.setPointerCapture(e.pointerId); }catch(_){}
+    t = setTimeout(() => { if (st){ st.armed = true; knob.classList.remove('holding'); knob.classList.add('armed'); txt.textContent = 'Arrastra → para desbloquear'; try{ navigator.vibrate && navigator.vibrate(40); }catch(_){} } }, 1200);
+  });
+  knob.addEventListener('pointermove', e => {
+    if (!st || e.pointerId !== st.id || !st.armed) return;
+    const dx = Math.max(0, Math.min(travel(), e.clientX - st.x));
+    knob.style.transform = `translateX(${dx}px)`; fill.style.width = (dx + knob.offsetWidth) + 'px';
+    if (dx >= travel() - 4){ reset(); unlock(); }
+  });
+  const end = e => { if (st && e.pointerId === st.id) reset(); };
+  knob.addEventListener('pointerup', end); knob.addEventListener('pointercancel', end);
+  document.addEventListener('pointerdown', e => { if (st && e.pointerId !== st.id) reset(); }, true); // otro dedo/mano: cancela
+})();
+
+/* ---------- 11. Guardar / arrancar ---------- */
+function save(){ return Promise.all([dbSet('kv','config',CFG), dbSet('kv','settings',S)]); }
+async function boot(){
+  await openDB();
+  CFG = await dbGet('kv','config') || baseConfig();
+  S = Object.assign({}, DEFAULT_SETTINGS, await dbGet('kv','settings') || {});
+  if (migrate(CFG)) await save();
+  if (await dbGet('kv','locked')){ locked = true; document.body.classList.add('locked'); fsLost = true; }
+  picIds = await dbGet('kv','picIds') || {};
+  // Correcciones de pictogramas en tableros ya guardados (v1.0.1)
+  const QFIX = {'papá':'padre', 'baño':'cuarto de baño'};
+  [...CFG.home, ...Object.values(CFG.folders).flatMap(f => f.cells)].forEach(c => {
+    if (c && !c.pic && QFIX[(c.label||'').toLowerCase()] && (!c.q || c.q === 'wc')) c.q = QFIX[c.label.toLowerCase()]; });
+  for (const k of await dbKeys('photos')){ const d = await dbGet('photos', k); if (d) photos.set(k, d); }
+  applySettingsUI(); render();
+  if ('speechSynthesis' in window){ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+  if (!idb) status('Aviso: este navegador no guarda cambios. Ábrelo desde una dirección web (https).');
+}
+window.MiVoz = { conjugate, grammarState, formFor, buildSentence, baseConfig, DEFAULT_SETTINGS }; // para pruebas
+boot();
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
