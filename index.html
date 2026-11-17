@@ -84,7 +84,9 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .cell.fol{background:var(--fol-bg);border-color:var(--fol-bd);border-top-width:10px}
 .cell.emp{background:transparent;border:2px dashed transparent;cursor:default}
 .cell.hid{visibility:hidden}
-body.editing .cell.emp{border-color:#b8bec8;cursor:pointer}
+body.editing .cell.emp{border-color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;background:#f8fafc}
+body.editing .cell.emp::after{content:'＋';font-size:38px;font-weight:800;color:#94a3b8}
+.fhint.ed{white-space:normal;line-height:1.25;flex:1;min-width:0;font-size:14px}
 body.editing .cell.hid{visibility:visible;opacity:.35}
 body.editing .cell{animation:none}
 body.editing .cell.sel{outline:4px solid var(--accent);outline-offset:2px}
@@ -223,9 +225,30 @@ body.locked #sentence{touch-action:pan-x}
   </div>
 </div>
 
+<!-- Menú de carpeta (modo edición) -->
+<div class="modal" id="mFol"><div class="sheet" style="max-width:460px">
+  <h2 id="mfTitle">Carpeta</h2>
+  <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">
+    <button class="btn pri" id="mfOpen" style="padding:16px;font-size:17px">📂 Abrir y editar lo que hay dentro</button>
+    <button class="btn" id="mfEdit" style="padding:14px;font-size:16px">✏️ Cambiar nombre o imagen de la carpeta</button>
+    <button class="btn dan" id="mfDel" style="padding:12px">🗑 Eliminar carpeta</button>
+    <button class="btn" id="mfCancel">Cancelar</button>
+  </div>
+</div></div>
+<!-- Añadir varios -->
+<div class="modal" id="mMulti"><div class="sheet" style="max-width:520px">
+  <h2>Añadir varios pictogramas</h2>
+  <div class="hint">Escribe los nombres separados por comas o uno por línea. El dibujo se busca solo (la primera vez necesita internet). Después puedes cambiar el dibujo de cualquiera tocándolo.</div>
+  <textarea id="mmText" rows="5" placeholder="Ej.: perro, gato, vaca, caballo" style="width:100%;margin-top:10px;font-size:17px;padding:10px;border:1px solid var(--line);border-radius:10px"></textarea>
+  <div class="row" style="margin-top:10px"><label for="mmKind">Tipo</label>
+    <select id="mmKind"><option value="cos">Cosa / lugar / animal</option><option value="ver">Verbo</option><option value="des">Descriptivo</option><option value="soc">Social</option></select></div>
+  <div class="actions"><span style="flex:1"></span><button class="btn" id="mmCancel">Cancelar</button><button class="btn pri" id="mmGo">Añadir</button></div>
+</div></div>
+
 <!-- Editor de botón -->
 <div class="modal" id="mEdit"><div class="sheet">
   <h2 id="eTitle">Editar botón</h2>
+  <div class="hint" id="eSteps" style="display:none;margin-bottom:8px"><b>① Escribe el nombre · ② Pulsa «Buscar pictograma» y toca el dibujo (o «Usar una foto») · ③ Guardar.</b> Si no eliges dibujo, se busca solo por el nombre.</div>
   <div class="row"><div class="kinds" id="eKinds"></div></div>
   <div id="eBody">
     <div class="row"><label for="eLabel">Texto</label><input type="text" id="eLabel" autocomplete="off"></div>
@@ -248,7 +271,7 @@ body.locked #sentence{touch-action:pan-x}
     <div class="row"><label><input type="checkbox" id="eHidden"> Ocultar por ahora (conserva su sitio)</label></div>
   </div>
   <div class="actions">
-    <button class="btn dan" id="eClearCell">Vaciar hueco</button>
+    <button class="btn dan" id="eClearCell">🗑 Quitar</button>
     <span style="flex:1"></span>
     <button class="btn" id="eCancel">Cancelar</button>
     <button class="btn pri" id="eSave">Guardar</button>
@@ -357,7 +380,7 @@ body.locked #sentence{touch-action:pan-x}
 
 <script>
 'use strict';
-const APP_VERSION = 'v1.3.0', APP_DATE = '29 de octubre de 2026';
+const APP_VERSION = 'v1.4.0', APP_DATE = '17 de noviembre de 2026';
 document.querySelectorAll('.ver').forEach(e => e.textContent = APP_VERSION);
 document.getElementById('verDate').textContent = APP_DATE;
 /* =====================================================================
@@ -565,6 +588,7 @@ const F = (label, folder, pic, q) => W(label,'fol',{folder, pic, q});
 const E = () => ({k:'emp'});
 const FA = (label, folder, art) => W(label,'fol',{folder, art});
 const COL = (l, hex, g) => W(l,'des',{art:{t:'color', v:hex}, gAdj:!!g});
+const NUM = (l, n) => W(l,'cos',{art:{t:'num', n}});
 const SHP = (l, n) => W(l,'cos',{art:{t:'shape', n, v:'#2563eb'}});
 
 function baseConfig(){
@@ -577,7 +601,7 @@ function baseConfig(){
     F('comida','f_com',null,'comida'), F('jugar','f_jug',9813), F('lugares','f_lug',null,'lugar'), F('cuerpo','f_cue',null,'cuerpo'),
     F('aseo','f_ase',null,'aseo'), F('sentir','f_sen',null,'emociones'), F('acciones','f_acc',null,'acción'), F('social','f_soc',null,'saludar'),
   ];
-  home.push(FA('colores','f_col',{t:'palette'}), FA('formas','f_for',{t:'shapes'}));
+  home.push(FA('colores','f_col',{t:'palette'}), FA('formas','f_for',{t:'shapes'}), F('animales','f_ani',null,'animales'), FA('números','f_num',{t:'nums'}));
   while (home.length % 8) home.push(E());
   const fill = (arr, n=24) => { while (arr.length < n) arr.push(E()); return arr; };
   const folders = {
@@ -593,10 +617,21 @@ function baseConfig(){
       C('casa'), C('escuela',32446), C('parque'), C('playa'), C('piscina'), C('supermercado'), C('coche'), C('calle'),
       C('médico'), C('casa de los abuelos',null,'abuelos'), C('cama'), C('baño',null,'cuarto de baño'), C('cocina'), C('habitación',null,'dormitorio'), C('salón'), C('terapia',null,'logopeda'),
       V('ir',8142), V('venir',32669), V('salir'), V('volver'), Sx('aquí'), Sx('allí'), Sx('fuera'), Sx('dentro')])},
+    f_ani:{name:'Animales', cells: fill([
+      C('perro'), C('gato'), C('vaca'), C('caballo'), C('cerdo'), C('oveja'), C('gallina'), C('pato'),
+      C('conejo'), C('pájaro'), C('pez'), C('tortuga'), C('rana'), C('mono'), C('elefante'), C('león'),
+      C('tigre'), C('oso'), C('jirafa'), C('cebra'), C('delfín'), C('serpiente'), C('mariposa'), C('abeja'),
+      V('querer',11538), V('ver',6564), V('gustar',37826), Sx('más',3220), Sx('otra vez'), E(), E(), E()])},
+    f_num:{name:'Números', cells: fill([
+      NUM('cero','0'), NUM('uno','1'), NUM('dos','2'), NUM('tres','3'), NUM('cuatro','4'), NUM('cinco','5'), NUM('seis','6'), NUM('siete','7'),
+      NUM('ocho','8'), NUM('nueve','9'), NUM('diez','10'), Sx('mucho'), Sx('poco'), V('contar'), V('querer',11538), Sx('más',3220),
+      Sx('otra vez'), E(), E(), E(), E(), E(), E(), E()])},
     f_cue:{name:'Cuerpo', cells: fill([
       C('cabeza',2673), C('ojo'), C('nariz'), C('boca'), C('oreja',2871), C('dientes'), C('pelo'), C('cuello'),
       C('barriga',28765), C('brazo',2669), C('mano',2928), C('dedo'), C('pierna',8666), C('rodilla'), C('pie',25327), C('culo',null,'nalgas'),
-      V('doler'), D('dolor',null), Sx('pupa',null,'herida'), V('ayudar',32648), D('frío'), D('calor'), E(), E()])},
+      V('doler'), D('dolor',null), Sx('pupa',null,'herida'), V('ayudar',32648), D('frío'), D('calor'), E(), E(),
+      C('cara'), C('lengua'), C('labios'), C('frente'), C('mejilla'), C('espalda'), C('hombro'), C('codo'),
+      C('uñas'), C('tobillo'), C('ombligo'), C('pecho'), E(), E(), E(), E()])},
     f_ase:{name:'Aseo', cells: fill([
       C('caca'), C('pis',null,'orinar'), C('pañal',2863), C('orinal'), C('váter',null,'inodoro'), C('papel',null,'papel higiénico'), C('jabón'), C('toalla'),
       V('bañarse',null), V('ducharse',11244), V('lavarse las manos',null), V('lavarse los dientes',null), V('peinarse'), V('vestirse'), V('hacer'), V('cambiar'),
@@ -621,7 +656,7 @@ function baseConfig(){
       Sx('¿qué?',null,'qué'), Sx('¿dónde?',null,'dónde'), Sx('¿quién?',null,'quién'), Sx('¿cuándo?',null,'cuándo'), Sx('ya',25736), Sx('ahora'), Sx('después'), Sx('otra vez'),
       Sx('mío'), Sx('tuyo'), Sx('nada',29839), Sx('todo'), Sx('mucho'), Sx('poco'), Sx('te quiero',null,'querer'), Sx('buenas noches')])},
   };
-  return { app:'mivoz', v:2, name:'Tablero base', cols:8, home, folders };
+  return { app:'mivoz', v:3, name:'Tablero base', cols:8, home, folders };
 }
 const DEFAULT_SETTINGS = { voice:'', rate:0.9, speakTap:true, conjBtn:true, implicitYo:true, imperative:true, dropPron:false,
   gender:'m', textPos:'above', lbSize:15, upper:true, returnHome:true, debounce:true, idleClear:true, idleSecs:30, palm:true, pinHash:hashPin('1234') };
@@ -718,6 +753,8 @@ function artSVG(a){
   const wrap = inner => `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${inner}</svg>`;
   if (a.t === 'color') return wrap(`<rect x="8" y="8" width="84" height="84" rx="16" fill="${a.v}" ${ln}/>`);
   if (a.t === 'palette') return wrap([['#e53935',8,8],['#1e66d6',54,8],['#fdd835',8,54],['#2e9e44',54,54]].map(([c,x,y]) => `<rect x="${x}" y="${y}" width="38" height="38" rx="8" fill="${c}" ${ln}/>`).join(''));
+  if (a.t === 'num'){ const n = String(a.n); return wrap(`<rect x="8" y="8" width="84" height="84" rx="16" fill="#fff" ${ln}/><text x="50" y="${n.length > 1 ? 66 : 72}" text-anchor="middle" font-family="system-ui,Arial,sans-serif" font-weight="800" font-size="${n.length > 1 ? 46 : 62}" fill="#2563eb">${n}</text>`); }
+  if (a.t === 'nums') return wrap(['1','2','3'].map((d,i) => `<text x="${20+i*30}" y="66" text-anchor="middle" font-family="system-ui,Arial,sans-serif" font-weight="800" font-size="38" fill="#2563eb">${d}</text>`).join(''));
   if (a.t === 'shapes') return wrap(`<circle cx="28" cy="28" r="20" fill="#2563eb" ${ln}/><rect x="56" y="8" width="36" height="36" rx="3" fill="#fdd835" ${ln}/><path d="M50 56 L86 94 L14 94 Z" fill="#e53935" ${ln}/>`);
   const f = `fill="${a.v || '#2563eb'}" ${ln}`;
   const S_ = {
@@ -747,9 +784,17 @@ const shownViews = () => { if (editing || view === 'home') return [view]; const 
 function resetPins(){ pinned = []; adding = false; }
 function renderFbar(){
   const bar = $('fbar'); bar.innerHTML = '';
-  if (editing || (view === 'home' && !pinned.length)){ bar.classList.remove('on'); return; }
-  bar.classList.add('on');
   const mk = (cls, html, fn) => { const b = document.createElement('button'); b.className = cls; b.innerHTML = html; b.onclick = fn; bar.appendChild(b); return b; };
+  if (editing){
+    bar.classList.add('on');
+    const h = document.createElement('span'); h.className = 'fhint ed';
+    if (view === 'home') h.textContent = 'Modo edición · toca un hueco ＋ para añadir, un pictograma para cambiarlo o quitarlo, o una carpeta para abrirla.';
+    else { mk('fb', '⬅ Carpetas', () => { view = 'home'; render(); }); mk('fb', '＋ Añadir varios', openMulti);
+      h.textContent = 'Editando «' + (CFG.folders[view] ? CFG.folders[view].name : '') + '» · toca un hueco ＋ para añadir, o un pictograma para cambiarlo o quitarlo.'; }
+    bar.appendChild(h); return;
+  }
+  if (view === 'home' && !pinned.length){ bar.classList.remove('on'); return; }
+  bar.classList.add('on');
   if (view !== 'home'){
     const isP = pinned.includes(view);
     mk('fb' + (isP ? ' on' : ''), isP ? '📌 Fijada ✓' : '📌 Fijar', () => { if (isP) pinned = pinned.filter(f => f !== view); else pinned.push(view); render(); });
@@ -840,6 +885,7 @@ board.addEventListener('click', e => {
       else { const cs = currentCells(); [cs[moveSel], cs[i]] = [cs[i], cs[moveSel]]; moveSel = null; save(); render(); }
       return;
     }
+    if (cell && cell.k === 'fol' && CFG.folders[cell.folder]){ openFolMenu(i); return; }
     openEditor(i); return;
   }
   if (!cell || !cell.k || cell.k === 'emp' || cell.hidden) return;
@@ -875,8 +921,8 @@ $('btnFull').onclick = () => {
   g.addEventListener('contextmenu', e => e.preventDefault());
 })();
 
-function enterEdit(){ editing = true; document.body.classList.add('editing'); tokens = []; render(); status('Modo edición: toca un botón para cambiarlo'); }
-function exitEdit(){ editing = false; moveMode = false; moveSel = null; $('eMove').classList.remove('on'); document.body.classList.remove('editing'); status(''); render(); }
+function enterEdit(){ editing = true; document.body.classList.add('editing'); tokens = []; render(); status(''); }
+function exitEdit(){ editing = false; view = 'home'; moveMode = false; moveSel = null; $('eMove').classList.remove('on'); document.body.classList.remove('editing'); status(''); render(); }
 $('eDone').onclick = exitEdit;
 $('eMove').onclick = () => { moveMode = !moveMode; moveSel = null; $('eMove').classList.toggle('on', moveMode);
   status(moveMode ? 'Toca un botón y luego el hueco donde quieres ponerlo' : 'Modo edición: toca un botón para cambiarlo'); render(); };
@@ -906,6 +952,24 @@ function setCols(nc){
 }
 $('eColAdd').onclick = () => setCols(CFG.cols + 1);
 $('eColDel').onclick = () => setCols(CFG.cols - 1);
+let folIdx = -1;
+function openFolMenu(i){ folIdx = i; $('mfTitle').textContent = 'Carpeta «' + currentCells()[i].label + '»'; $('mFol').classList.add('open'); }
+$('mfCancel').onclick = () => $('mFol').classList.remove('open');
+$('mfOpen').onclick = () => { const c = currentCells()[folIdx]; $('mFol').classList.remove('open'); view = c.folder; render(); };
+$('mfEdit').onclick = () => { $('mFol').classList.remove('open'); openEditor(folIdx); };
+$('mfDel').onclick = () => { const cs = currentCells(), c = cs[folIdx];
+  if (!confirm('¿Eliminar la carpeta «' + c.label + '» y todo lo que contiene?')) return;
+  delete CFG.folders[c.folder]; cs[folIdx] = {k:'emp'}; save(); $('mFol').classList.remove('open'); render(); };
+function openMulti(){ $('mmText').value = ''; $('mMulti').classList.add('open'); setTimeout(() => $('mmText').focus(), 100); }
+$('mmCancel').onclick = () => $('mMulti').classList.remove('open');
+$('mmGo').onclick = () => {
+  const words = $('mmText').value.split(/[,;\n]+/).map(w => w.trim()).filter(Boolean); if (!words.length) return;
+  const cs = currentCells(); const k = $('mmKind').value; const have = new Set(cs.filter(c => c && c.label).map(c => c.label.toLowerCase())); let n = 0;
+  words.forEach(w => { const lw = w.toLowerCase(); if (have.has(lw)) return;
+    let idx = cs.findIndex(c => !c || !c.k || c.k === 'emp');
+    if (idx < 0){ for (let i = 0; i < CFG.cols; i++) cs.push({k:'emp'}); idx = cs.length - CFG.cols; }
+    cs[idx] = {k, label:lw}; have.add(lw); n++; });
+  save(); $('mMulti').classList.remove('open'); render(); status(n + ' añadidos. Toca cualquiera para cambiar su dibujo.'); };
 function status(t){ $('status').textContent = t; }
 
 /* ---------- 8. PIN ---------- */
@@ -936,10 +1000,11 @@ $('pinCancel').onclick = () => { $('mPin').classList.remove('open'); pinCb && pi
 
 /* ---------- 9. Editor de botón ---------- */
 const KINDS = [['per','Persona'],['ver','Verbo'],['cos','Cosa / lugar'],['des','Descriptivo'],['soc','Social'],['fol','Carpeta'],['emp','Vacío']];
-let edIdx = -1, ed = null;
+let edIdx = -1, ed = null, edNew = false;
 function openEditor(i){
   edIdx = i; ed = JSON.parse(JSON.stringify(currentCells()[i] || {k:'emp'}));
   if (!ed.k) ed.k = 'emp';
+  edNew = ed.k === 'emp'; if (edNew) ed.k = 'cos';
   $('eKinds').innerHTML = KINDS.filter(([k]) => !(k==='fol' && view!=='home')).map(([k,n]) => `<button class="kind ${k} ${ed.k===k?'on':''}" data-k="${k}">${n}</button>`).join('');
   $('eLabel').value = ed.label || '';
   $('ePerson').value = ed.person || '3s'; $('eGender').value = ed.g || 'm';
@@ -954,7 +1019,7 @@ function syncEditor(){
   $('eGenderAdjRow').style.display = k==='des' ? '' : 'none';
   $('eNoPhoto').style.display = ed.photo ? '' : 'none';
   $('eRecrop').style.display = ed.photo && photos.has(ed.photo) ? '' : 'none';
-  $('eTitle').textContent = isEmp ? 'Hueco vacío' : 'Editar botón';
+  $('eTitle').textContent = isEmp ? 'Hueco vacío' : (edNew ? 'Añadir pictograma' : 'Editar botón'); $('eSteps').style.display = edNew && !isEmp ? '' : 'none';
   const prev = $('ePrev'); prev.innerHTML = '';
   if (!isEmp){ const c = {...ed, label: $('eLabel').value}; const holder = document.createElement('div'); holder.style.cssText='width:100%;height:100%;display:flex;align-items:center;justify-content:center'; prev.appendChild(holder); fillImage(holder, c).then(()=>{ const im = holder.querySelector('img'); if (im && ed.photo) im.className='photo'; }); }
   const cp = $('eConj');
@@ -1170,18 +1235,46 @@ function normalizePhoto(src){ // cualquier foto → cuadrado 480×480 centrado (
 
 /* Tableros guardados antes de la v1.1: añade Colores y Formas SIN mover ningún botón existente */
 function migrate(cfg){
-  if ((cfg.v || 1) >= 2) return false;
-  const b = baseConfig(), cols = cfg.cols;
-  ['f_col','f_for'].forEach(id => {
-    if (cfg.folders[id]) return;
-    const list = b.folders[id].cells.filter(c => c.k && c.k !== 'emp'); const a = list.slice();
-    while (a.length % cols || a.length < cols*2) a.push({k:'emp'});
-    cfg.folders[id] = { name: b.folders[id].name, cells: a };
-  });
-  let lastRow = -1; cfg.home.forEach((c, i) => { if (c && c.k && c.k !== 'emp') lastRow = Math.floor(i / cols); });
-  const r = lastRow + 1; if (r * cols >= cfg.home.length) for (let i = 0; i < cols; i++) cfg.home.push({k:'emp'});
-  cfg.home[r*cols] = FA('colores','f_col',{t:'palette'}); cfg.home[r*cols + 1] = FA('formas','f_for',{t:'shapes'});
-  cfg.v = 2; return true;
+  let ch = false; const b = baseConfig(), cols = cfg.cols; const nonE = c => c && c.k && c.k !== 'emp';
+  if ((cfg.v || 1) < 2){
+    ['f_col','f_for'].forEach(id => {
+      if (cfg.folders[id]) return;
+      const a = b.folders[id].cells.filter(nonE);
+      while (a.length % cols || a.length < cols*2) a.push({k:'emp'});
+      cfg.folders[id] = { name: b.folders[id].name, cells: a };
+    });
+    let lastRow = -1; cfg.home.forEach((c, i) => { if (nonE(c)) lastRow = Math.floor(i / cols); });
+    const r = lastRow + 1; if (r * cols >= cfg.home.length) for (let i = 0; i < cols; i++) cfg.home.push({k:'emp'});
+    cfg.home[r*cols] = FA('colores','f_col',{t:'palette'}); cfg.home[r*cols + 1] = FA('formas','f_for',{t:'shapes'});
+    cfg.v = 2; ch = true;
+  }
+  if (cfg.v < 3){
+    // Carpetas nuevas: Animales y Números
+    [['f_ani', () => F('animales','f_ani',null,'animales')], ['f_num', () => FA('números','f_num',{t:'nums'})]].forEach(([id, mk]) => {
+      if (!cfg.folders[id]){
+        const a = b.folders[id].cells.filter(nonE);
+        while (a.length % cols || a.length < cols*2) a.push({k:'emp'});
+        cfg.folders[id] = { name: b.folders[id].name, cells: a };
+      }
+      if (!cfg.home.some(c => c && c.folder === id)){
+        let last = -1; cfg.home.forEach((c, i) => { if (nonE(c)) last = i; });
+        let t = last + 1; while (t >= cfg.home.length) for (let i = 0; i < cols; i++) cfg.home.push({k:'emp'});
+        cfg.home[t] = mk();
+      }
+    });
+    // Más partes del cuerpo en la carpeta Cuerpo (solo las que faltan)
+    const cue = cfg.folders.f_cue;
+    if (cue){
+      const have = new Set(cue.cells.filter(c => c && c.label).map(c => c.label.toLowerCase()));
+      b.folders.f_cue.cells.filter(c => c.k === 'cos' && !have.has(c.label.toLowerCase())).forEach(c => {
+        let i = cue.cells.findIndex(x => !nonE(x));
+        if (i < 0){ for (let j = 0; j < cols; j++) cue.cells.push({k:'emp'}); i = cue.cells.length - cols; }
+        cue.cells[i] = c;
+      });
+    }
+    cfg.v = 3; ch = true;
+  }
+  return ch;
 }
 
 /* ---------- 10b. Inactividad, bloqueo y protección contra manos ---------- */
