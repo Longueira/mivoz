@@ -56,6 +56,23 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
 .fb.on{background:#dbeafe;border-color:var(--accent);color:#1e40af}
 .fchip{height:34px;padding:0 12px;border-radius:999px;background:#e2e8f0;font-size:15px;font-weight:700;display:flex;align-items:center;gap:6px;border:0;white-space:nowrap}
 .fhint{font-size:15px;font-weight:700;color:var(--muted);white-space:nowrap}
+#attLayer{position:fixed;inset:0;pointer-events:none;z-index:60;overflow:hidden}
+.attChar{position:fixed;pointer-events:none}
+.attChar img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 6px 10px rgba(0,0,0,.28))}
+.attChar.peek img{animation:attPeek .55s cubic-bezier(.3,1.6,.5,1) both,attBob 1.1s ease-in-out .55s infinite}
+@keyframes attPeek{from{transform:translateY(55%) scale(.4);opacity:0}to{transform:none;opacity:1}}
+@keyframes attBob{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-14%) rotate(5deg)}}
+.attChar.party img{animation:attParty 1.8s ease-in-out both}
+@keyframes attParty{0%{transform:none}25%{transform:translateY(-45%) scale(1.25) rotate(-12deg)}50%{transform:translateY(-10%) scale(1.1) rotate(360deg)}75%{transform:translateY(-35%) scale(1.2) rotate(360deg)}100%{transform:translateY(-70%) scale(.6) rotate(360deg);opacity:0}}
+.attChar.walk img{animation:attHop .45s ease-in-out infinite alternate}
+@keyframes attHop{from{transform:translateY(0) rotate(-6deg)}to{transform:translateY(-22%) rotate(6deg)}}
+.cell.called{animation:attGlow 1s ease-in-out infinite;z-index:3}
+@keyframes attGlow{0%,100%{box-shadow:0 0 0 4px #ffc400}50%{box-shadow:0 0 0 4px #ffc400,0 0 0 14px rgba(255,196,0,.35);transform:scale(1.04)}}
+.conf{position:fixed;width:12px;height:12px;border-radius:3px;pointer-events:none}
+.chars{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}
+.chars div{position:relative;width:72px;height:72px;border:1px solid var(--line);border-radius:10px;background:#f8fafc;display:flex;align-items:center;justify-content:center}
+.chars img{max-width:64px;max-height:64px}
+.chars button{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;border:0;background:#ef4444;color:#fff;font-weight:800;line-height:24px;padding:0}
 #boardWrap{flex:1;min-height:0;padding:var(--gap);position:relative}
 #board{display:grid;gap:var(--gap);height:100%;width:100%}
 .cell{position:relative;display:flex;flex-direction:column;border-radius:var(--radius);border:3px solid var(--otr-bd);
@@ -337,6 +354,15 @@ body.locked #sentence{touch-action:pan-x}
   <div class="row"><label><input type="checkbox" id="stReturn"> Volver al inicio al elegir dentro de una carpeta</label></div>
   <div class="row"><label><input type="checkbox" id="stDebounce"> Ignorar toques repetidos muy seguidos</label></div>
 
+  <h3>Modo atención (personajes)</h3>
+  <div class="row"><label><input type="checkbox" id="stAtt"> Activar: mantener pulsado un pictograma 1 segundo lo «llama» (brilla y asoma un personaje); al tocarlo, el personaje lo celebra</label></div>
+  <div class="row"><label><input type="checkbox" id="stAttSound"> Con sonido</label></div>
+  <div class="row"><label><input type="checkbox" id="stAttRoam"> Si nadie toca durante</label>
+    <select id="stAttRoamSecs"><option>10</option><option>20</option><option>30</option><option>60</option></select><label>segundos, un personaje cruza la pantalla</label></div>
+  <div class="row"><b>Mis personajes</b> <button class="btn" id="stCharAdd">＋ Añadir imágenes</button><input type="file" id="stCharFile" accept="image/*" multiple style="display:none"></div>
+  <div id="stChars" class="chars"></div>
+  <p class="hint">Sube imágenes de sus personajes favoritos desde la galería (mejor PNG con fondo transparente; los GIF animados se mueven solos). Se guardan solo en esta tablet. Sin imágenes, aparece una estrella.</p>
+
   <h3>Bloqueo e inactividad</h3>
   <div class="row"><label><input type="checkbox" id="stIdle"> Borrar la frase y volver al inicio tras</label>
     <select id="stIdleSecs"><option>15</option><option>30</option><option>45</option><option>60</option><option>120</option></select><label>segundos sin tocar</label></div>
@@ -380,7 +406,7 @@ body.locked #sentence{touch-action:pan-x}
 
 <script>
 'use strict';
-const APP_VERSION = 'v1.4.0', APP_DATE = '17 de noviembre de 2026';
+const APP_VERSION = 'v1.5.0', APP_DATE = '25 de noviembre de 2026';
 document.querySelectorAll('.ver').forEach(e => e.textContent = APP_VERSION);
 document.getElementById('verDate').textContent = APP_DATE;
 /* =====================================================================
@@ -659,7 +685,7 @@ function baseConfig(){
   return { app:'mivoz', v:3, name:'Tablero base', cols:8, home, folders };
 }
 const DEFAULT_SETTINGS = { voice:'', rate:0.9, speakTap:true, conjBtn:true, implicitYo:true, imperative:true, dropPron:false,
-  gender:'m', textPos:'above', lbSize:15, upper:true, returnHome:true, debounce:true, idleClear:true, idleSecs:30, palm:true, pinHash:hashPin('1234') };
+  gender:'m', textPos:'above', lbSize:15, upper:true, returnHome:true, debounce:true, idleClear:true, idleSecs:30, palm:true, att:false, attSound:true, attRoam:false, attRoamSecs:20, chars:[], pinHash:hashPin('1234') };
 
 /* ---------- 3. Almacenamiento (IndexedDB con respaldo en memoria) ---------- */
 const mem = new Map();
@@ -831,6 +857,7 @@ function render(){
   });
   $('btnHome').style.display = (view === 'home' && !pinned.length) ? 'none' : 'flex';
   renderFbar();
+  setTimeout(() => { try{ posCalls(); }catch(e){} }, 0);
   renderSentence();
 }
 function updateLabels(){ // re-etiqueta verbos/adjetivos sin recargar imágenes
@@ -875,6 +902,97 @@ function speak(text){
 
 /* ---------- 7. Interacción ---------- */
 let lastTap = {i:-1, t:0};
+/* ===== Modo atención: llamar la mirada a un pictograma y premiar al tocarlo ===== */
+const STAR_SVG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M50 6l12.6 26.5 29 3.6-21.3 20 5.5 28.8L50 70.8 24.2 84.9l5.5-28.8-21.3-20 29-3.6z" fill="#ffd23f" stroke="#e0a800" stroke-width="3" stroke-linejoin="round"/><circle cx="40" cy="44" r="5" fill="#222"/><circle cx="60" cy="44" r="5" fill="#222"/><circle cx="41.5" cy="42.5" r="1.6" fill="#fff"/><circle cx="61.5" cy="42.5" r="1.6" fill="#fff"/><path d="M40 56q10 9 20 0" fill="none" stroke="#222" stroke-width="3.5" stroke-linecap="round"/><circle cx="31" cy="55" r="4.5" fill="#ff9aa2" opacity=".75"/><circle cx="69" cy="55" r="4.5" fill="#ff9aa2" opacity=".75"/></svg>');
+const attLayer = document.createElement('div'); attLayer.id = 'attLayer'; document.body.appendChild(attLayer);
+let calls = [], lp = null, lpFired = 0, lastRoam = 0, actx = null;
+function charSrc(){ const l = (S.chars || []).filter(id => photos.has(id)); return l.length ? photos.get(l[Math.floor(Math.random() * l.length)]) : STAR_SVG; }
+function cellEl(f, i){ return board.querySelector(`.cell[data-f="${f}"][data-i="${i}"]`); }
+function beep(notes){
+  if (S.attSound === false) return;
+  try{ actx = actx || new (window.AudioContext || window.webkitAudioContext)(); const t = actx.currentTime;
+    notes.forEach(([f, d, v]) => { const o = actx.createOscillator(), g = actx.createGain(); o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0, t + d); g.gain.linearRampToValueAtTime(v || .18, t + d + .02); g.gain.exponentialRampToValueAtTime(.001, t + d + .35);
+      o.connect(g).connect(actx.destination); o.start(t + d); o.stop(t + d + .4); }); }catch(e){}
+}
+function newChar(cls){ const w = document.createElement('div'); w.className = 'attChar ' + cls; const im = new Image(); im.src = charSrc(); im.alt = ''; w.appendChild(im); attLayer.appendChild(w); return w; }
+function callCell(d){
+  const f = d.dataset.f, i = +d.dataset.i;
+  if (i < 0 || calls.some(c => c.f === f && c.i === i)) return;
+  if (calls.length >= 3) endCall(calls[0], false);
+  calls.push({f, i, w:newChar('peek'), t0:Date.now()});
+  beep([[784,0],[1047,.12]]); posCalls();
+}
+function endCall(c, reward){
+  calls = calls.filter(x => x !== c);
+  const el = cellEl(c.f, c.i); if (el) el.classList.remove('called');
+  if (reward && c.w.style.display !== 'none'){ c.w.className = 'attChar party'; confetti(c.w); beep([[523,0],[659,.1],[784,.2],[1047,.3,.22]]); setTimeout(() => c.w.remove(), 1900); }
+  else { c.w.style.transition = 'opacity .4s'; c.w.style.opacity = '0'; setTimeout(() => c.w.remove(), 450); }
+}
+function posCalls(){
+  calls.forEach(c => {
+    const el = cellEl(c.f, c.i);
+    if (!el){ c.w.style.display = 'none'; return; }
+    el.classList.add('called');
+    const r = el.getBoundingClientRect(); const s = Math.min(r.width, r.height) * 0.72;
+    Object.assign(c.w.style, {display:'', width:s + 'px', height:s + 'px', left:Math.min(innerWidth - s - 2, r.right - s * 0.6) + 'px', top:Math.max(2, r.top - s * 0.5) + 'px'});
+  });
+}
+function confetti(w){
+  const r = w.getBoundingClientRect(), cx = r.left + r.width/2, cy = r.top + r.height/2; const cols = ['#ff5a5f','#ffd23f','#3ec300','#2f80ed','#a259ff','#ff8c42'];
+  for (let k = 0; k < 24; k++){ const p = document.createElement('i'); p.className = 'conf'; p.style.background = cols[k % 6]; p.style.left = cx + 'px'; p.style.top = cy + 'px'; attLayer.appendChild(p);
+    const a = Math.random() * Math.PI * 2, dd = 80 + Math.random() * 150;
+    p.animate([{transform:'translate(0,0) rotate(0deg)', opacity:1}, {transform:`translate(${Math.cos(a)*dd}px,${Math.sin(a)*dd + 70}px) rotate(${Math.random()*720}deg)`, opacity:0}],
+      {duration:1100 + Math.random()*500, easing:'cubic-bezier(.2,.7,.4,1)'}).onfinish = () => p.remove(); }
+}
+function roam(){
+  const b = board.getBoundingClientRect(); const s = Math.min(190, b.height * .28); const w = newChar('walk');
+  const ltr = Math.random() < .5; Object.assign(w.style, {width:s + 'px', height:s + 'px', left:'0px', top:(b.top + Math.random() * Math.max(1, b.height - s)) + 'px'});
+  beep([[660,0,.08],[880,.15,.08]]);
+  w.animate([{transform:`translateX(${ltr ? -s : innerWidth}px)`}, {transform:`translateX(${ltr ? innerWidth : -s}px)`}], {duration:6500, easing:'linear'}).onfinish = () => w.remove();
+}
+setInterval(() => {
+  if (!S) return;
+  calls.filter(c => Date.now() - c.t0 > 15000).forEach(c => endCall(c, false));
+  if (calls.length) posCalls();
+  if (!S.att || !S.attRoam || editing || document.querySelector('.modal.open')) return;
+  const n = (S.attRoamSecs || 20) * 1000;
+  if (Date.now() - lastAct > n && Date.now() - lastRoam > n){ lastRoam = Date.now(); roam(); }
+}, 500);
+window.addEventListener('resize', () => { try{ posCalls(); }catch(e){} });
+board.addEventListener('pointerdown', e => {
+  if (!S.att || editing) return;
+  const d = e.target.closest('.cell'); if (!d || d.classList.contains('emp')) return;
+  if (lp) clearTimeout(lp.t);
+  lp = {x:e.clientX, y:e.clientY, t:setTimeout(() => { lp = null;
+    if (locked && (Date.now() < palmUntil || liveCount() >= 2)) return;
+    lpFired = Date.now(); callCell(d); }, 900)};
+});
+const lpCancel = e => { if (lp && (e.type !== 'pointermove' || Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 14)){ clearTimeout(lp.t); lp = null; } };
+['pointerup','pointercancel','pointerleave','pointermove'].forEach(ev => board.addEventListener(ev, lpCancel));
+board.addEventListener('click', e => { if (Date.now() - lpFired < 900){ e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+/* Mis personajes */
+function renderChars(){
+  const box = $('stChars'); box.innerHTML = '';
+  (S.chars || []).filter(id => photos.has(id)).forEach(id => { const d = document.createElement('div'); d.innerHTML = `<img src="${photos.get(id)}" alt=""><button title="Quitar">✕</button>`;
+    d.querySelector('button').onclick = async () => { S.chars = S.chars.filter(x => x !== id); photos.delete(id); try{ await dbDel('photos', id); }catch(e){} await save(); renderChars(); };
+    box.appendChild(d); });
+}
+function readChar(f){
+  return new Promise(res => { const rd = new FileReader(); rd.onload = () => {
+    if (/gif/i.test(f.type) && f.size < 3e6) return res(rd.result); // GIF animado: tal cual
+    const im = new Image(); im.onload = () => { const k = Math.min(1, 420 / Math.max(im.width, im.height)); const c = document.createElement('canvas');
+      c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/png')); };
+    im.onerror = () => res(null); im.src = rd.result; }; rd.readAsDataURL(f); });
+}
+$('stCharAdd').onclick = () => { $('stCharFile').value = ''; $('stCharFile').click(); };
+$('stCharFile').onchange = async () => {
+  S.chars = S.chars || [];
+  for (const f of $('stCharFile').files){ const d = await readChar(f); if (!d) continue; const id = 'chr_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+    photos.set(id, d); await dbSet('photos', id, d); S.chars.push(id); }
+  await save(); renderChars();
+};
+
 board.addEventListener('click', e => {
   const d = e.target.closest('.cell'); if (!d) return;
   const i = +d.dataset.i; const cf = d.dataset.f || view; const cell = cellsOf(cf)[i];
@@ -892,6 +1010,7 @@ board.addEventListener('click', e => {
   const now = Date.now();
   if (S.debounce && lastTap.i === i && now - lastTap.t < 450) return;
   lastTap = {i, t:now};
+  { const cc = calls.find(c => c.f === cf && c.i === i); if (cc) endCall(cc, true); }
   d.classList.add('pressed'); setTimeout(() => d.classList.remove('pressed'), 120);
   if (cell.k === 'fol'){ if (CFG.folders[cell.folder]){ view = cell.folder; adding = false; render(); } return; }
   const st = grammarState(tokens);
@@ -1118,6 +1237,7 @@ function openSettings(){
   $('stTextPos').value = S.textPos; $('stLb').value = String(S.lbSize); $('stUpper').checked = S.upper;
   $('stReturn').checked = S.returnHome; $('stDebounce').checked = S.debounce;
   $('stIdle').checked = S.idleClear !== false; $('stIdleSecs').value = String(S.idleSecs || 30); $('stPalm').checked = S.palm !== false; $('stName').value = CFG.name || '';
+  $('stAtt').checked = !!S.att; $('stAttSound').checked = S.attSound !== false; $('stAttRoam').checked = !!S.attRoam; $('stAttRoamSecs').value = String(S.attRoamSecs || 20); renderChars();
   loadVoices(); $('mSet').classList.add('open');
 }
 $('stRate').oninput = e => $('stRateV').textContent = (+e.target.value).toFixed(2) + '×';
@@ -1126,7 +1246,8 @@ $('stClose').onclick = () => {
   Object.assign(S, { voice:$('stVoice').value, rate:+$('stRate').value, speakTap:$('stSpeakTap').checked, conjBtn:$('stConjBtn').checked,
     implicitYo:$('stImplicit').checked, imperative:$('stImper').checked, dropPron:$('stDropPron').checked, gender:$('stGender').value,
     textPos:$('stTextPos').value, lbSize:+$('stLb').value, upper:$('stUpper').checked, returnHome:$('stReturn').checked, debounce:$('stDebounce').checked,
-    idleClear:$('stIdle').checked, idleSecs:+$('stIdleSecs').value, palm:$('stPalm').checked });
+    idleClear:$('stIdle').checked, idleSecs:+$('stIdleSecs').value, palm:$('stPalm').checked,
+    att:$('stAtt').checked, attSound:$('stAttSound').checked, attRoam:$('stAttRoam').checked, attRoamSecs:+$('stAttRoamSecs').value });
   const nc = +$('stCols').value;
   if (nc !== CFG.cols && !setCols(nc)) $('stCols').value = CFG.cols;
   CFG.name = $('stName').value.trim() || CFG.name;
@@ -1147,6 +1268,7 @@ $('stCache').onclick = async () => {
 /* Exportar / importar */
 $('stExport').onclick = async () => {
   const used = new Set([...CFG.home, ...Object.values(CFG.folders).flatMap(f=>f.cells)].map(c => c.photo).filter(Boolean));
+  (S.chars || []).forEach(id => used.add(id));
   const ph = {}; used.forEach(id => { if (photos.has(id)) ph[id] = photos.get(id); });
   const data = { ...CFG, appVersion: APP_VERSION, settings: {...S, pinHash: undefined}, photos: ph, exported: new Date().toISOString() };
   const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
