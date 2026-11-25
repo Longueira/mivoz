@@ -356,7 +356,10 @@ body.locked #sentence{touch-action:pan-x}
 
   <h3>Modo atención (personajes)</h3>
   <div class="row"><label><input type="checkbox" id="stAtt"> Activar: mantener pulsado un pictograma 1 segundo lo «llama» (brilla y asoma un personaje); al tocarlo, el personaje lo celebra</label></div>
+  <div class="row"><label>El pictograma llamado sigue resaltado</label>
+    <select id="stAttHold"><option value="0">hasta que lo toque</option><option value="10">10 segundos</option><option value="15">15 segundos</option><option value="20">20 segundos</option><option value="25">25 segundos</option><option value="30">30 segundos</option><option value="60">60 segundos</option></select></div>
   <div class="row"><label><input type="checkbox" id="stAttSound"> Con sonido</label></div>
+  <p class="hint">Para quitar una llamada sin que la toque, vuelve a mantener pulsado ese pictograma 1 segundo.</p>
   <div class="row"><label><input type="checkbox" id="stAttRoam"> Si nadie toca durante</label>
     <select id="stAttRoamSecs"><option>10</option><option>20</option><option>30</option><option>60</option></select><label>segundos, un personaje cruza la pantalla</label></div>
   <div class="row"><b>Mis personajes</b> <button class="btn" id="stCharAdd">＋ Añadir imágenes</button><input type="file" id="stCharFile" accept="image/*" multiple style="display:none"></div>
@@ -406,7 +409,7 @@ body.locked #sentence{touch-action:pan-x}
 
 <script>
 'use strict';
-const APP_VERSION = 'v1.5.0', APP_DATE = '25 de noviembre de 2026';
+const APP_VERSION = 'v1.5.1', APP_DATE = '25 de noviembre de 2026';
 document.querySelectorAll('.ver').forEach(e => e.textContent = APP_VERSION);
 document.getElementById('verDate').textContent = APP_DATE;
 /* =====================================================================
@@ -685,7 +688,7 @@ function baseConfig(){
   return { app:'mivoz', v:3, name:'Tablero base', cols:8, home, folders };
 }
 const DEFAULT_SETTINGS = { voice:'', rate:0.9, speakTap:true, conjBtn:true, implicitYo:true, imperative:true, dropPron:false,
-  gender:'m', textPos:'above', lbSize:15, upper:true, returnHome:true, debounce:true, idleClear:true, idleSecs:30, palm:true, att:false, attSound:true, attRoam:false, attRoamSecs:20, chars:[], pinHash:hashPin('1234') };
+  gender:'m', textPos:'above', lbSize:15, upper:true, returnHome:true, debounce:true, idleClear:true, idleSecs:30, palm:true, att:false, attSound:true, attRoam:false, attRoamSecs:20, attHold:0, chars:[], pinHash:hashPin('1234') };
 
 /* ---------- 3. Almacenamiento (IndexedDB con respaldo en memoria) ---------- */
 const mem = new Map();
@@ -918,7 +921,8 @@ function beep(notes){
 function newChar(cls){ const w = document.createElement('div'); w.className = 'attChar ' + cls; const im = new Image(); im.src = charSrc(); im.alt = ''; w.appendChild(im); attLayer.appendChild(w); return w; }
 function callCell(d){
   const f = d.dataset.f, i = +d.dataset.i;
-  if (i < 0 || calls.some(c => c.f === f && c.i === i)) return;
+  if (i < 0) return;
+  const ex = calls.find(c => c.f === f && c.i === i); if (ex){ endCall(ex, false); return; } // segunda pulsación larga: quita la llamada
   if (calls.length >= 3) endCall(calls[0], false);
   calls.push({f, i, w:newChar('peek'), t0:Date.now()});
   beep([[784,0],[1047,.12]]); posCalls();
@@ -953,7 +957,7 @@ function roam(){
 }
 setInterval(() => {
   if (!S) return;
-  calls.filter(c => Date.now() - c.t0 > 15000).forEach(c => endCall(c, false));
+  if (S.attHold > 0) calls.filter(c => Date.now() - c.t0 > S.attHold * 1000).forEach(c => endCall(c, false));
   if (calls.length) posCalls();
   if (!S.att || !S.attRoam || editing || document.querySelector('.modal.open')) return;
   const n = (S.attRoamSecs || 20) * 1000;
@@ -1237,7 +1241,7 @@ function openSettings(){
   $('stTextPos').value = S.textPos; $('stLb').value = String(S.lbSize); $('stUpper').checked = S.upper;
   $('stReturn').checked = S.returnHome; $('stDebounce').checked = S.debounce;
   $('stIdle').checked = S.idleClear !== false; $('stIdleSecs').value = String(S.idleSecs || 30); $('stPalm').checked = S.palm !== false; $('stName').value = CFG.name || '';
-  $('stAtt').checked = !!S.att; $('stAttSound').checked = S.attSound !== false; $('stAttRoam').checked = !!S.attRoam; $('stAttRoamSecs').value = String(S.attRoamSecs || 20); renderChars();
+  $('stAtt').checked = !!S.att; $('stAttSound').checked = S.attSound !== false; $('stAttRoam').checked = !!S.attRoam; $('stAttRoamSecs').value = String(S.attRoamSecs || 20); $('stAttHold').value = String(S.attHold || 0); renderChars();
   loadVoices(); $('mSet').classList.add('open');
 }
 $('stRate').oninput = e => $('stRateV').textContent = (+e.target.value).toFixed(2) + '×';
@@ -1247,7 +1251,7 @@ $('stClose').onclick = () => {
     implicitYo:$('stImplicit').checked, imperative:$('stImper').checked, dropPron:$('stDropPron').checked, gender:$('stGender').value,
     textPos:$('stTextPos').value, lbSize:+$('stLb').value, upper:$('stUpper').checked, returnHome:$('stReturn').checked, debounce:$('stDebounce').checked,
     idleClear:$('stIdle').checked, idleSecs:+$('stIdleSecs').value, palm:$('stPalm').checked,
-    att:$('stAtt').checked, attSound:$('stAttSound').checked, attRoam:$('stAttRoam').checked, attRoamSecs:+$('stAttRoamSecs').value });
+    att:$('stAtt').checked, attSound:$('stAttSound').checked, attRoam:$('stAttRoam').checked, attRoamSecs:+$('stAttRoamSecs').value, attHold:+$('stAttHold').value });
   const nc = +$('stCols').value;
   if (nc !== CFG.cols && !setCols(nc)) $('stCols').value = CFG.cols;
   CFG.name = $('stName').value.trim() || CFG.name;
