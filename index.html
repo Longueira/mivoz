@@ -364,6 +364,13 @@ body.locked #sentence{touch-action:pan-x}
     <select id="stAttRoamSecs"><option>10</option><option>20</option><option>30</option><option>60</option></select><label>segundos, un personaje cruza la pantalla</label></div>
   <div class="row"><b>Mis personajes</b> <button class="btn" id="stCharAdd">＋ Añadir imágenes</button><input type="file" id="stCharFile" accept="image/*" multiple style="display:none"></div>
   <div id="stChars" class="chars"></div>
+  <div class="row"><label for="stAttSize">Tamaño de los personajes</label>
+    <input type="range" id="stAttSize" min="60" max="250" step="10" style="flex:1;min-width:160px">
+    <b id="stAttSizeV" style="min-width:52px;text-align:right">100 %</b></div>
+  <div style="display:flex;align-items:flex-end;gap:14px;min-height:130px;padding:8px 0">
+    <div style="width:110px;height:62px;border:3px solid #22c55e;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#334155;flex:0 0 auto">PICTOGRAMA</div>
+    <img id="stAttPrev" alt="" style="object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,.25))">
+    <span class="hint" style="margin:0">Así de grande se verá junto a un botón. Empieza grande y ve bajándolo cuando ya lo busque solo.</span></div>
   <p class="hint">Sube imágenes de sus personajes favoritos desde la galería (mejor PNG con fondo transparente; los GIF animados se mueven solos). Se guardan solo en esta tablet. Sin imágenes, aparece una estrella.</p>
 
   <h3>Bloqueo e inactividad</h3>
@@ -409,7 +416,7 @@ body.locked #sentence{touch-action:pan-x}
 
 <script>
 'use strict';
-const APP_VERSION = 'v1.5.1', APP_DATE = '25 de noviembre de 2026';
+const APP_VERSION = 'v1.5.2', APP_DATE = '26 de noviembre de 2026';
 document.querySelectorAll('.ver').forEach(e => e.textContent = APP_VERSION);
 document.getElementById('verDate').textContent = APP_DATE;
 /* =====================================================================
@@ -688,7 +695,7 @@ function baseConfig(){
   return { app:'mivoz', v:3, name:'Tablero base', cols:8, home, folders };
 }
 const DEFAULT_SETTINGS = { voice:'', rate:0.9, speakTap:true, conjBtn:true, implicitYo:true, imperative:true, dropPron:false,
-  gender:'m', textPos:'above', lbSize:15, upper:true, returnHome:true, debounce:true, idleClear:true, idleSecs:30, palm:true, att:false, attSound:true, attRoam:false, attRoamSecs:20, attHold:0, chars:[], pinHash:hashPin('1234') };
+  gender:'m', textPos:'above', lbSize:15, upper:true, returnHome:true, debounce:true, idleClear:true, idleSecs:30, palm:true, att:false, attSound:true, attRoam:false, attRoamSecs:20, attHold:0, attSize:100, chars:[], pinHash:hashPin('1234') };
 
 /* ---------- 3. Almacenamiento (IndexedDB con respaldo en memoria) ---------- */
 const mem = new Map();
@@ -938,8 +945,8 @@ function posCalls(){
     const el = cellEl(c.f, c.i);
     if (!el){ c.w.style.display = 'none'; return; }
     el.classList.add('called');
-    const r = el.getBoundingClientRect(); const s = Math.min(r.width, r.height) * 0.72;
-    Object.assign(c.w.style, {display:'', width:s + 'px', height:s + 'px', left:Math.min(innerWidth - s - 2, r.right - s * 0.6) + 'px', top:Math.max(2, r.top - s * 0.5) + 'px'});
+    const r = el.getBoundingClientRect(); const s = Math.min(r.width, r.height) * 0.72 * (S.attSize || 100) / 100;
+    Object.assign(c.w.style, {display:'', width:s + 'px', height:s + 'px', left:Math.max(2, Math.min(innerWidth - s - 2, r.right - s * 0.6)) + 'px', top:Math.max(2, Math.min(innerHeight - s - 2, r.top - s * 0.5)) + 'px'});
   });
 }
 function confetti(w){
@@ -950,7 +957,7 @@ function confetti(w){
       {duration:1100 + Math.random()*500, easing:'cubic-bezier(.2,.7,.4,1)'}).onfinish = () => p.remove(); }
 }
 function roam(){
-  const b = board.getBoundingClientRect(); const s = Math.min(190, b.height * .28); const w = newChar('walk');
+  const b = board.getBoundingClientRect(); const s = Math.min(190, b.height * .28) * (S.attSize || 100) / 100; const w = newChar('walk');
   const ltr = Math.random() < .5; Object.assign(w.style, {width:s + 'px', height:s + 'px', left:'0px', top:(b.top + Math.random() * Math.max(1, b.height - s)) + 'px'});
   beep([[660,0,.08],[880,.15,.08]]);
   w.animate([{transform:`translateX(${ltr ? -s : innerWidth}px)`}, {transform:`translateX(${ltr ? innerWidth : -s}px)`}], {duration:6500, easing:'linear'}).onfinish = () => w.remove();
@@ -989,12 +996,14 @@ function readChar(f){
       c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/png')); };
     im.onerror = () => res(null); im.src = rd.result; }; rd.readAsDataURL(f); });
 }
+function attPrev(){ const v = +$('stAttSize').value; $('stAttSizeV').textContent = v + ' %'; const im = $('stAttPrev'); im.src = (S.chars || []).filter(id => photos.has(id)).map(id => photos.get(id))[0] || STAR_SVG; const px = Math.round(62 * 0.72 * 1.6 * v / 100); im.style.width = im.style.height = px + 'px'; }
+$('stAttSize').oninput = attPrev;
 $('stCharAdd').onclick = () => { $('stCharFile').value = ''; $('stCharFile').click(); };
 $('stCharFile').onchange = async () => {
   S.chars = S.chars || [];
   for (const f of $('stCharFile').files){ const d = await readChar(f); if (!d) continue; const id = 'chr_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
     photos.set(id, d); await dbSet('photos', id, d); S.chars.push(id); }
-  await save(); renderChars();
+  await save(); renderChars(); attPrev();
 };
 
 board.addEventListener('click', e => {
@@ -1241,7 +1250,7 @@ function openSettings(){
   $('stTextPos').value = S.textPos; $('stLb').value = String(S.lbSize); $('stUpper').checked = S.upper;
   $('stReturn').checked = S.returnHome; $('stDebounce').checked = S.debounce;
   $('stIdle').checked = S.idleClear !== false; $('stIdleSecs').value = String(S.idleSecs || 30); $('stPalm').checked = S.palm !== false; $('stName').value = CFG.name || '';
-  $('stAtt').checked = !!S.att; $('stAttSound').checked = S.attSound !== false; $('stAttRoam').checked = !!S.attRoam; $('stAttRoamSecs').value = String(S.attRoamSecs || 20); $('stAttHold').value = String(S.attHold || 0); renderChars();
+  $('stAtt').checked = !!S.att; $('stAttSound').checked = S.attSound !== false; $('stAttRoam').checked = !!S.attRoam; $('stAttRoamSecs').value = String(S.attRoamSecs || 20); $('stAttHold').value = String(S.attHold || 0); $('stAttSize').value = String(S.attSize || 100); attPrev(); renderChars();
   loadVoices(); $('mSet').classList.add('open');
 }
 $('stRate').oninput = e => $('stRateV').textContent = (+e.target.value).toFixed(2) + '×';
@@ -1251,7 +1260,7 @@ $('stClose').onclick = () => {
     implicitYo:$('stImplicit').checked, imperative:$('stImper').checked, dropPron:$('stDropPron').checked, gender:$('stGender').value,
     textPos:$('stTextPos').value, lbSize:+$('stLb').value, upper:$('stUpper').checked, returnHome:$('stReturn').checked, debounce:$('stDebounce').checked,
     idleClear:$('stIdle').checked, idleSecs:+$('stIdleSecs').value, palm:$('stPalm').checked,
-    att:$('stAtt').checked, attSound:$('stAttSound').checked, attRoam:$('stAttRoam').checked, attRoamSecs:+$('stAttRoamSecs').value, attHold:+$('stAttHold').value });
+    att:$('stAtt').checked, attSound:$('stAttSound').checked, attRoam:$('stAttRoam').checked, attRoamSecs:+$('stAttRoamSecs').value, attHold:+$('stAttHold').value, attSize:+$('stAttSize').value });
   const nc = +$('stCols').value;
   if (nc !== CFG.cols && !setCols(nc)) $('stCols').value = CFG.cols;
   CFG.name = $('stName').value.trim() || CFG.name;
