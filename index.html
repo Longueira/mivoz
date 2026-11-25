@@ -360,8 +360,8 @@ body.locked #sentence{touch-action:pan-x}
     <select id="stAttHold"><option value="0">hasta que lo toque</option><option value="10">10 segundos</option><option value="15">15 segundos</option><option value="20">20 segundos</option><option value="25">25 segundos</option><option value="30">30 segundos</option><option value="60">60 segundos</option></select></div>
   <div class="row"><label><input type="checkbox" id="stAttSound"> Con sonido</label></div>
   <p class="hint">Para quitar una llamada sin que la toque, vuelve a mantener pulsado ese pictograma 1 segundo.</p>
-  <div class="row"><label><input type="checkbox" id="stAttRoam"> Si nadie toca durante</label>
-    <select id="stAttRoamSecs"><option>10</option><option>20</option><option>30</option><option>60</option></select><label>segundos, un personaje cruza la pantalla</label></div>
+  <div class="row"><label><input type="checkbox" id="stAttRoam"> Si hay pictogramas llamados y no los toca en</label>
+    <select id="stAttRoamSecs"><option>10</option><option>20</option><option>30</option><option>60</option></select><label>segundos, un personaje cruza la pantalla por esa fila para recordárselo</label></div>
   <div class="row"><b>Mis personajes</b> <button class="btn" id="stCharAdd">＋ Añadir imágenes</button><input type="file" id="stCharFile" accept="image/*" multiple style="display:none"></div>
   <div id="stChars" class="chars"></div>
   <div class="row"><label for="stAttSize">Tamaño de los personajes</label>
@@ -416,7 +416,7 @@ body.locked #sentence{touch-action:pan-x}
 
 <script>
 'use strict';
-const APP_VERSION = 'v1.5.2', APP_DATE = '26 de noviembre de 2026';
+const APP_VERSION = 'v1.5.3', APP_DATE = '26 de noviembre de 2026';
 document.querySelectorAll('.ver').forEach(e => e.textContent = APP_VERSION);
 document.getElementById('verDate').textContent = APP_DATE;
 /* =====================================================================
@@ -956,9 +956,11 @@ function confetti(w){
     p.animate([{transform:'translate(0,0) rotate(0deg)', opacity:1}, {transform:`translate(${Math.cos(a)*dd}px,${Math.sin(a)*dd + 70}px) rotate(${Math.random()*720}deg)`, opacity:0}],
       {duration:1100 + Math.random()*500, easing:'cubic-bezier(.2,.7,.4,1)'}).onfinish = () => p.remove(); }
 }
-function roam(){
+function roam(c){
   const b = board.getBoundingClientRect(); const s = Math.min(190, b.height * .28) * (S.attSize || 100) / 100; const w = newChar('walk');
-  const ltr = Math.random() < .5; Object.assign(w.style, {width:s + 'px', height:s + 'px', left:'0px', top:(b.top + Math.random() * Math.max(1, b.height - s)) + 'px'});
+  const el = c && cellEl(c.f, c.i); const r = el ? el.getBoundingClientRect() : null;
+  const y = r ? r.top + r.height / 2 - s / 2 : b.top + Math.random() * Math.max(1, b.height - s);
+  const ltr = Math.random() < .5; Object.assign(w.style, {width:s + 'px', height:s + 'px', left:'0px', top:Math.max(2, Math.min(innerHeight - s - 2, y)) + 'px'});
   beep([[660,0,.08],[880,.15,.08]]);
   w.animate([{transform:`translateX(${ltr ? -s : innerWidth}px)`}, {transform:`translateX(${ltr ? innerWidth : -s}px)`}], {duration:6500, easing:'linear'}).onfinish = () => w.remove();
 }
@@ -967,8 +969,10 @@ setInterval(() => {
   if (S.attHold > 0) calls.filter(c => Date.now() - c.t0 > S.attHold * 1000).forEach(c => endCall(c, false));
   if (calls.length) posCalls();
   if (!S.att || !S.attRoam || editing || document.querySelector('.modal.open')) return;
-  const n = (S.attRoamSecs || 20) * 1000;
-  if (Date.now() - lastAct > n && Date.now() - lastRoam > n){ lastRoam = Date.now(); roam(); }
+  // Solo si hay pictogramas llamados (visibles) sin tocar
+  const vis = calls.filter(c => cellEl(c.f, c.i)); if (!vis.length) return;
+  const n = (S.attRoamSecs || 20) * 1000; const since = Math.max(lastAct, ...vis.map(c => c.t0), lastRoam);
+  if (Date.now() - since > n){ lastRoam = Date.now(); roam(vis[vis.length - 1]); }
 }, 500);
 window.addEventListener('resize', () => { try{ posCalls(); }catch(e){} });
 board.addEventListener('pointerdown', e => {
